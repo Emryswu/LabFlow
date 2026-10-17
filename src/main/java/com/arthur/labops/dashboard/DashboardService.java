@@ -15,6 +15,7 @@ import com.arthur.labops.reservation.ReservationStatus;
 import com.arthur.labops.user.PlatformUserRepository;
 import com.arthur.labops.user.SystemAccountInitializer;
 import com.arthur.labops.workorder.FaultWorkOrderRepository;
+import com.arthur.labops.workorder.WorkOrderCategory;
 import com.arthur.labops.workorder.WorkOrderPriority;
 import com.arthur.labops.workorder.WorkOrderStatus;
 
@@ -52,10 +53,14 @@ public class DashboardService {
                 equipmentRepository.count(),
                 equipmentRepository.countByStatus(EquipmentStatus.AVAILABLE),
                 equipmentRepository.countByStatus(EquipmentStatus.MAINTENANCE),
+                equipmentRepository.countByStatus(EquipmentStatus.IN_USE),
+                equipmentRepository.countByStatus(EquipmentStatus.RETIRED),
                 reservationRepository.countByStatus(ReservationStatus.PENDING),
                 reservationRepository.countByStatus(ReservationStatus.APPROVED),
                 reservationRepository.countByStartTimeBetween(dayStart, dayEnd),
                 workOrderRepository.countByStatusIn(openStatuses),
-                workOrderRepository.countByPriorityAndStatusIn(WorkOrderPriority.URGENT, openStatuses));
+                workOrderRepository.countByPriorityAndStatusIn(WorkOrderPriority.URGENT, openStatuses),
+                // Discrepancy tickets the reconciliation job raised and nobody has closed yet.
+                workOrderRepository.countByCategoryAndStatusIn(WorkOrderCategory.PAYMENT_DISCREPANCY, openStatuses));
     }
 }

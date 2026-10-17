@@ -83,7 +83,10 @@ class BusinessOperationsIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(mockMvc, objectMapper, "teacher", "teacher123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.usersTotal").value(5))
-                .andExpect(jsonPath("$.equipmentTotal").isNumber());
+                .andExpect(jsonPath("$.equipmentTotal").isNumber())
+                .andExpect(jsonPath("$.equipmentInUse").isNumber())
+                .andExpect(jsonPath("$.equipmentRetired").isNumber())
+                .andExpect(jsonPath("$.paymentDiscrepanciesOpen").isNumber());
     }
 
     private Long createEquipment() throws Exception {

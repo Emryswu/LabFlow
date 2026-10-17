@@ -5,10 +5,13 @@ public record DashboardStatsResponse(
         long equipmentTotal,
         long equipmentAvailable,
         long equipmentMaintenance,
+        long equipmentInUse,
+        long equipmentRetired,
         long reservationsPending,
         long reservationsApproved,
         long reservationsToday,
         long workOrdersOpen,
-        long workOrdersUrgent
+        long workOrdersUrgent,
+        long paymentDiscrepanciesOpen
 ) {
 }
