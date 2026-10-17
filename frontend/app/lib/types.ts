@@ -7,7 +7,7 @@ export type Equipment = { id: number; code: string; name: string; category: stri
 export type Reservation = { id: number; equipmentId: number; requesterId: number; requesterName: string; purpose: string; startTime: string; endTime: string; status: string; createdAt: string; expiresAt: string };
 export type WorkOrder = { id: number; equipmentId: number; reporterId: number; reporterName: string; title: string; description: string; priority: string; status: string; assigneeId: number | null; createdAt: string; updatedAt: string; resolvedAt: string | null };
 export type AuditLog = { id: number; actorUsername: string; actorRole: string; action: string; targetType: string; targetId: number | null; details: string; createdAt: string };
-export type Stats = { usersTotal: number; equipmentTotal: number; equipmentAvailable: number; equipmentMaintenance: number; reservationsPending: number; reservationsApproved: number; reservationsToday: number; workOrdersOpen: number; workOrdersUrgent: number };
+export type Stats = { usersTotal: number; equipmentTotal: number; equipmentAvailable: number; equipmentMaintenance: number; equipmentInUse: number; equipmentRetired: number; reservationsPending: number; reservationsApproved: number; reservationsToday: number; workOrdersOpen: number; workOrdersUrgent: number; paymentDiscrepanciesOpen: number };
 export type PageData<T> = { content: T[]; page: number; size: number; totalElements: number; totalPages: number };
 export type Technician = { id: number; username: string; displayName: string };
 

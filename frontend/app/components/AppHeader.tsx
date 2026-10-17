@@ -1,6 +1,7 @@
 import { roleLabels } from "../lib/labels";
 import { isViewAllowed, navItemsForRole, workspaceEyebrow, workspaceTitle } from "../lib/roles";
 import type { UserProfile, View } from "../lib/types";
+import { Icon } from "./icons";
 import { Brand } from "./ui";
 
 export function AppHeader({ user, view, onViewChange, onLogout }: {
@@ -19,16 +20,16 @@ export function AppHeader({ user, view, onViewChange, onLogout }: {
           type="button"
           className={view === item.id ? "active" : ""}
           data-nav={item.id}
+          aria-current={view === item.id ? "page" : undefined}
           onClick={() => onViewChange(item.id)}
         >
-          <span>{item.icon}</span>{item.label}
+          <Icon name={item.icon} size={18} />{item.label}
         </button>)}
     </nav>
-    <div className="system-note"><span></span><div><b>系统运行正常</b><small>{roleLabels[user.role]}空间 · 数据已同步</small></div></div>
     <div className="profile">
       <div className="avatar">{user.displayName.slice(0, 1)}</div>
       <div><b>{user.displayName}</b><small>{roleLabels[user.role]} · {user.username}</small></div>
-      <button type="button" onClick={onLogout} title="退出登录">↪</button>
+      <button type="button" onClick={onLogout} title="退出登录" aria-label="退出登录"><Icon name="logout" size={18} /></button>
     </div>
   </aside>;
 }
@@ -42,7 +43,7 @@ export function WorkspaceHeader({ user, view, onRefresh }: { user: UserProfile; 
     </div>
     <div className="top-actions">
       <span className="role-chip">{roleLabels[user.role]}</span>
-      <button type="button" className="icon-button" onClick={onRefresh} title="刷新">↻</button>
+      <button type="button" className="icon-button" onClick={onRefresh} title="刷新" aria-label="刷新"><Icon name="refresh" size={18} /></button>
     </div>
   </header>;
 }
