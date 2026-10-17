@@ -53,7 +53,7 @@ await step("admin", async () => {
   await shot(page, "03-equipment.png");
   await view(page, "workorders", "table tbody tr");
   await shot(page, "05-workorders.png");
-  await view(page, "audit", "table tbody tr");
+  await view(page, "audit", ".timeline article");
   await shot(page, "06-audit.png");
   await context.close();
 });
