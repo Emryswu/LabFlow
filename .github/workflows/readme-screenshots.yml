@@ -28,25 +28,23 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
       - name: 打包后端
         run: ./mvnw -B --no-transfer-progress -DskipTests package
-      - name: 启动后端（默认 H2 profile + 演示种子）
+      - name: 前端依赖与截图工具
         run: |
-          nohup java -jar target/*.jar --server.port=18080 > backend.log 2>&1 &
-          for i in $(seq 1 90); do curl -fs http://127.0.0.1:18080/actuator/health && break; sleep 2; done
-          curl -fs http://127.0.0.1:18080/actuator/health
-      - name: 启动前端
-        working-directory: frontend
-        env:
-          BACKEND_BASE_URL: http://127.0.0.1:18080
-        run: |
-          npm ci --no-audit --no-fund
-          nohup npx vinext dev --port 13000 --host 127.0.0.1 > ../frontend.log 2>&1 &
-          for i in $(seq 1 90); do curl -fs -o /dev/null http://127.0.0.1:13000/ && break; sleep 2; done
-      - name: 截图
-        run: |
+          (cd frontend && npm ci --no-audit --no-fund)
           mkdir -p /tmp/shots && cd /tmp/shots
           npm init -y > /dev/null && npm i --no-audit --no-fund playwright@1.56.0 > /dev/null
           npx playwright install --with-deps chromium > /dev/null
+      # One step: background processes started in an earlier step are not guaranteed to survive.
+      - name: 起栈并截图（默认 H2 profile + 演示种子）
+        env:
+          BACKEND_BASE_URL: http://127.0.0.1:18080
+        run: |
           set +e
+          setsid nohup java -jar target/*.jar --server.port=18080 > backend.log 2>&1 < /dev/null &
+          for i in $(seq 1 90); do curl -fs -o /dev/null http://127.0.0.1:18080/actuator/health && break; sleep 2; done
+          (cd frontend && setsid nohup npx vinext dev --port 13000 --host 127.0.0.1 > ../frontend.log 2>&1 < /dev/null &)
+          for i in $(seq 1 120); do curl -fs -o /dev/null http://127.0.0.1:13000/ && break; sleep 2; done
+          curl -s -o /dev/null -w "frontend http %{http_code}\n" http://127.0.0.1:13000/ | sed 's/^/::warning::/'
           node "$GITHUB_WORKSPACE/.github/screenshots/take.mjs" "$GITHUB_WORKSPACE/docs/screenshots" > shots.log 2>&1
           code=$?
           cat shots.log
@@ -56,8 +54,8 @@ jobs:
       - name: 失败时打印日志
         if: failure()
         run: |
-          tail -n 15 backend.log | sed 's/^/::warning::backend /' || true
-          tail -n 15 frontend.log | sed 's/^/::warning::frontend /' || true
+          tail -n 5 backend.log | sed 's/^/::warning::backend /' || true
+          tail -n 25 frontend.log | sed 's/^/::warning::frontend /' || true
       - name: 提交截图
         if: always()
         run: |
