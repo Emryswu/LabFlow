@@ -67,7 +67,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long>,
 
     long countByStatus(ReservationStatus status);
 
-    long countByStartTimeBetween(Instant start, Instant end);
+    /** Half-open {@code [from, to)}: a reservation starting exactly at midnight belongs to the next day. */
+    long countByStartTimeGreaterThanEqualAndStartTimeLessThanAndStatusIn(
+            Instant from, Instant to, Collection<ReservationStatus> statuses);
 
     @Query("""
             select distinct reservation.equipment.id from Reservation reservation

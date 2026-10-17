@@ -18,4 +18,9 @@ public class DashboardController {
     DashboardStatsResponse getStats() {
         return dashboardService.getStats();
     }
+
+    @GetMapping("/trends")
+    DashboardTrendsResponse getTrends() {
+        return dashboardService.getTrends();
+    }
 }

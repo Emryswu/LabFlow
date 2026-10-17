@@ -146,3 +146,182 @@ for (const [name, startTime, endTime, expected] of [
     assert.ok(html.includes(">通过</button>"), "Test must exercise the approval card");
   });
 }
+
+// ---- Trend sparklines on the stat cards ----
+
+const trendDays = Array.from({ length: 14 }, (_, index) => `2026-10-${String(4 + index).padStart(2, "0")}`);
+const trendsFixture = {
+  days: trendDays,
+  // previous 7 days: 5, last 7 days: 6 -> up 20%
+  reservationsCreated: [1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 2, 0, 3, 0],
+  reservationsScheduled: Array(14).fill(0),
+  // previous 0, last 2 -> "new"
+  workOrdersCreated: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+  workOrdersResolved: Array(14).fill(1),
+  paymentDiscrepanciesCreated: null,
+};
+
+test("week-over-week splits the 14 days and names the change", () => {
+  const { weekOverWeek } = loadComponent("lib/trends.ts");
+  const created = weekOverWeek(trendsFixture, "reservationsCreated");
+  assert.deepEqual(created.bars, [0, 1, 0, 2, 0, 3, 0]);
+  assert.deepEqual(created.days, trendDays.slice(7));
+  assert.equal(created.current, 6);
+  assert.equal(created.previous, 5);
+  assert.deepEqual(created.change, { kind: "up", percent: 20 });
+  assert.deepEqual(weekOverWeek(trendsFixture, "workOrdersCreated").change, { kind: "new" });
+  assert.deepEqual(weekOverWeek(trendsFixture, "workOrdersResolved").change, { kind: "flat" });
+  assert.deepEqual(weekOverWeek(trendsFixture, "reservationsScheduled").change, { kind: "flat" });
+  const fewer = { ...trendsFixture, reservationsCreated: [2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3] };
+  assert.deepEqual(weekOverWeek(fewer, "reservationsCreated").change, { kind: "down", percent: 70 });
+  // Missing data never produces a half-drawn chart.
+  assert.equal(weekOverWeek(trendsFixture, "paymentDiscrepanciesCreated"), null);
+  assert.equal(weekOverWeek(null, "reservationsCreated"), null);
+  assert.equal(weekOverWeek({ ...trendsFixture, reservationsCreated: [1, 2, 3] }, "reservationsCreated"), null);
+});
+
+test("stat cards draw the last 7 days and the change when trends are present", () => {
+  const { DashboardView } = loadComponent("components/views/DashboardView.tsx");
+  const render = (trends) => renderToStaticMarkup(React.createElement(DashboardView, {
+    user, stats: null, trends, reservations: page([]), workorders: page([]), equipment: page(equipment),
+    busy: false, canApprove: true, onViewChange() {}, onOpenCreate() {}, onDecide() {}, onRefresh() {},
+  }));
+  const html = render(trendsFixture);
+  // Teacher: pending (submitted), today's schedule, fault reports; available equipment is a snapshot.
+  assert.equal(html.match(/class="stat-trend"/g)?.length, 3);
+  assert.equal(html.match(/class="spark-bar"|class="spark-empty"/g)?.length, 21);
+  assert.ok(html.includes("近7天提交 <b>6</b>"));
+  assert.ok(html.includes(">20%</span>"));
+  assert.ok(html.includes(">新增</span>"));
+  assert.ok(html.includes("<title>10月16日 3 条</title>"));
+  assert.ok(!render(null).includes("stat-trend"), "Without trends the cards only show their numbers");
+});
+
+for (const [name, trendsResponse, expectedTrends] of [
+  ["a failed trends request leaves the cards without charts", () => Promise.reject(new Error("boom")), 0],
+  ["trends load alongside the dashboard", () => Promise.resolve(trendsFixture), 3],
+]) {
+  test(`dashboard: ${name}`, async (t) => {
+    const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
+    const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
+    const previous = Object.fromEntries(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    for (const [key, value] of Object.entries(globals)) {
+      Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+    }
+    const container = document.getElementById("root");
+    const root = createRoot(container);
+    t.after(async () => {
+      await act(async () => root.unmount());
+      dom.window.close();
+      for (const key of Object.keys(globals)) {
+        if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+        else delete globalThis[key];
+      }
+    });
+
+    let listener;
+    let trendsRequested = false;
+    const { default: Home } = loadComponent("page.tsx", {
+      subscribeSession: (next) => { listener = next; return () => {}; },
+      clearLegacyAuthStorage() {},
+      refreshSession: async () => listener({ accessToken: "test-token", user }),
+      api: async (path) => {
+        const url = new URL(path, "http://localhost/");
+        switch (url.pathname) {
+          case "/api/dashboard/stats": return { equipmentTotal: 2, equipmentAvailable: 1, reservationsPending: 4 };
+          case "/api/dashboard/trends": trendsRequested = true; return trendsResponse();
+          case "/api/reservations": return page([reservation]);
+          case "/api/work-orders": return page([]);
+          case "/api/equipment": return page(equipment);
+          default: throw new Error(`Unexpected API request: ${path}`);
+        }
+      },
+    });
+
+    await act(async () => root.render(React.createElement(Home)));
+    await waitFor(() => trendsRequested && container.querySelector(".row-main b")?.textContent === "可用显微镜");
+    await act(async () => { await delay(20); });
+    assert.equal(container.querySelectorAll(".stat-card").length, 4);
+    assert.equal(container.querySelector(".stat-card strong").textContent, "4条");
+    assert.equal(container.querySelectorAll(".stat-trend").length, expectedTrends);
+    assert.equal(container.querySelector(".toast.error"), null, "A trends failure is not worth an error toast");
+  });
+}
+
+for (const scenario of ["approval", "newer refresh", "session change"]) {
+  test(`slow trends stay independent of ${scenario}`, async (t) => {
+    const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
+    const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
+    const previous = Object.fromEntries(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    for (const [key, value] of Object.entries(globals)) {
+      Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+    }
+    const container = document.getElementById("root");
+    const root = createRoot(container);
+    t.after(async () => {
+      await act(async () => root.unmount());
+      dom.window.close();
+      for (const key of Object.keys(globals)) {
+        if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+        else delete globalThis[key];
+      }
+    });
+
+    let listener;
+    let decisionSucceeded = false;
+    let trendRequests = 0;
+    let slowSignal;
+    let releaseTrends;
+    const slowTrends = new Promise((resolve) => { releaseTrends = resolve; });
+    const staleTrends = { ...trendsFixture, reservationsCreated: Array(14).fill(9) };
+    const { default: Home } = loadComponent("page.tsx", {
+      subscribeSession: (next) => { listener = next; return () => {}; },
+      clearLegacyAuthStorage() {},
+      refreshSession: async () => listener({ accessToken: "test-token", user }),
+      api: async (path, _token, init) => {
+        const url = new URL(path, "http://localhost/");
+        switch (url.pathname) {
+          case "/api/dashboard/stats": return { equipmentTotal: 2, equipmentAvailable: 1, reservationsPending: decisionSucceeded ? 1 : 2 };
+          case "/api/dashboard/trends":
+            trendRequests++;
+            if ((scenario === "approval" && decisionSucceeded) || (scenario !== "approval" && trendRequests === 1)) {
+              slowSignal = init.signal;
+              return slowTrends;
+            }
+            return trendsFixture;
+          case "/api/reservations/1/decision": decisionSucceeded = true; return {};
+          case "/api/reservations": return page([
+            { ...reservation, status: decisionSucceeded ? "APPROVED" : "PENDING" },
+            { ...reservation, id: 2 },
+          ]);
+          case "/api/work-orders": return page([]);
+          case "/api/equipment": return page(equipment);
+          default: throw new Error(`Unexpected API request: ${path}`);
+        }
+      },
+    });
+
+    await act(async () => root.render(React.createElement(Home)));
+    await waitFor(() => container.querySelectorAll(".decision .solid-button").length === 2);
+    if (scenario === "approval") {
+      await act(async () => container.querySelector(".decision .solid-button").click());
+      await waitFor(() => decisionSucceeded && container.querySelectorAll(".decision .solid-button").length === 1);
+      assert.equal(container.querySelector(".decision .solid-button").disabled, false,
+        "A pending decorative request must not block the next approval");
+      assert.equal(container.querySelector(".loading-bar"), null);
+    } else {
+      if (scenario === "newer refresh") {
+        await act(async () => container.querySelector(".hero-chips button").click());
+      } else {
+        await act(async () => listener({ accessToken: "next-token", user: { ...user, id: 2, username: "teacher2" } }));
+        assert.equal(slowSignal.aborted, true, "Session reset must abort independent trend requests too");
+      }
+      await waitFor(() => trendRequests === 2 && container.querySelector(".trend-text b")?.textContent === "6");
+    }
+
+    // Resolve even after abort: a late network response must still be ignored.
+    await act(async () => { releaseTrends(staleTrends); await slowTrends; });
+    const expected = scenario === "approval" ? "63" : "6";
+    assert.equal(container.querySelector(".trend-text b").textContent, expected);
+  });
+}

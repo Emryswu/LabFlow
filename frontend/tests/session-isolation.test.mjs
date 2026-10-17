@@ -17,6 +17,7 @@ test("session changes abort requests and clear every role-scoped dataset", async
   assert.match(resetBlock, /controller\.abort\(\)/);
   for (const setter of [
     "setStats(null)",
+    "setTrends(null)",
     "setEquipment(null)",
     "setDashboardEquipment(null)",
     "setReservations(null)",
@@ -35,7 +36,7 @@ test("session changes abort requests and clear every role-scoped dataset", async
 test("late page responses are gated by the current session generation", async () => {
   const source = await pageSource();
   const loadBlock = source.match(
-    /const load = useCallback\(async[\s\S]*?\n  \}, \[accessToken, reservationFilter, workorderFilter, notify\]\);/,
+    /const load = useCallback\(async[\s\S]*?\n  \}, \[accessToken, reservationFilter, workorderFilter, notify, loadTrends\]\);/,
   )?.[0];
 
   assert.ok(loadBlock, "load implementation not found");
