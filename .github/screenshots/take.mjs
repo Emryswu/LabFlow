@@ -4,6 +4,10 @@ import { chromium } from "/tmp/shots/node_modules/playwright/index.mjs";
 const out = process.argv[2];
 const base = "http://127.0.0.1:13000/";
 const browser = await chromium.launch();
+let failed = 0;
+async function step(name, fn) {
+  try { await fn(); } catch (error) { failed += 1; console.error(`error in ${name}:`, String(error).split("\n")[0]); }
+}
 
 async function session(user, password) {
   const context = await browser.newContext({
@@ -33,15 +37,15 @@ async function shot(page, name) {
   console.log("saved", name);
 }
 
-{
+await step("login", async () => {
   const { context, page } = await session(null);
   await page.waitForSelector('input[autocomplete="username"]');
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${out}/01-login.png` });
   console.log("saved 01-login.png");
   await context.close();
-}
-{
+});
+await step("admin", async () => {
   const { context, page } = await session("admin", "admin123");
   await view(page, null, ".row-item");
   await shot(page, "02-dashboard-admin.png");
@@ -52,23 +56,24 @@ async function shot(page, name) {
   await view(page, "audit", "table tbody tr");
   await shot(page, "06-audit.png");
   await context.close();
-}
-{
+});
+await step("teacher", async () => {
   const { context, page } = await session("teacher", "teacher123");
   await view(page, "reservations", ".week-block");
   await shot(page, "04-reservations.png");
   await context.close();
-}
-{
+});
+await step("student", async () => {
   const { context, page } = await session("student", "student123");
   await view(page, null, ".row-item");
   await shot(page, "07-dashboard-student.png");
   await context.close();
-}
-{
+});
+await step("technician", async () => {
   const { context, page } = await session("technician", "tech123");
   await view(page, "workorders", "table tbody tr");
   await shot(page, "08-workorders-technician.png");
   await context.close();
-}
+});
 await browser.close();
+process.exit(failed ? 1 : 0);
