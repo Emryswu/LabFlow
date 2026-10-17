@@ -165,6 +165,17 @@ label { display: grid; gap: 7px; color: #4d4641; font-size: 13px; font-weight: 6
 .stat-card strong { display: flex; align-items: baseline; gap: 5px; margin: 6px 0 4px; color: #14171b; font-size: 32px; font-weight: 800; line-height: 1.1; letter-spacing: -.5px; }
 .stat-card strong em { color: #3d424a; font-size: 14px; font-style: normal; font-weight: 600; letter-spacing: 0; }
 .stat-card p { margin: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+/* Week trend under the number: last 7 days as bars, change against the 7 days before.
+   One series, so one hue; the text stays in ink tokens and the arrow carries direction. */
+.stat-trend { display: flex; grid-column: 1 / -1; align-items: flex-end; gap: 10px; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.spark { flex: 0 0 auto; overflow: visible; }
+.spark-bar { fill: var(--orange); }
+.spark-empty { fill: var(--track); }
+.spark rect:hover { fill: var(--accent-dark); }
+.trend-text { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; color: var(--muted); white-space: nowrap; font-size: 12px; line-height: 1; }
+.trend-text b { color: var(--ink); font-weight: 700; }
+.trend-change { display: inline-flex; align-items: center; gap: 1px; margin-left: 4px; padding: 3px 6px; border-radius: 999px; color: #3d424a; background: #f2f3f5; font-weight: 600; }
+.trend-new { color: var(--accent-text); background: var(--soft-accent); }
 .stat-open { position: absolute; top: 14px; right: 12px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; color: #8d929a; background: transparent; }
 .stat-open:hover { color: var(--accent-text); background: var(--soft-accent); }
 

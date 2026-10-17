@@ -8,6 +8,16 @@ export type Reservation = { id: number; equipmentId: number; requesterId: number
 export type WorkOrder = { id: number; equipmentId: number; reporterId: number; reporterName: string; title: string; description: string; priority: string; status: string; assigneeId: number | null; createdAt: string; updatedAt: string; resolvedAt: string | null };
 export type AuditLog = { id: number; actorUsername: string; actorRole: string; action: string; targetType: string; targetId: number | null; details: string; createdAt: string };
 export type Stats = { usersTotal: number; equipmentTotal: number; equipmentAvailable: number; equipmentMaintenance: number; equipmentInUse: number; equipmentRetired: number; reservationsPending: number; reservationsApproved: number; reservationsToday: number; workOrdersOpen: number; workOrdersUrgent: number; paymentDiscrepanciesOpen: number };
+/** Daily counts from /api/dashboard/trends, oldest first; the last day is today. */
+export type Trends = {
+  days: string[];
+  reservationsCreated: number[];
+  reservationsScheduled: number[];
+  workOrdersCreated: number[];
+  workOrdersResolved: number[];
+  /** Admins only; null for everyone else. */
+  paymentDiscrepanciesCreated: number[] | null;
+};
 export type PageData<T> = { content: T[]; page: number; size: number; totalElements: number; totalPages: number };
 export type Technician = { id: number; username: string; displayName: string };
 

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { roleLabels, statusLabels } from "../../lib/labels";
 import { dashboardCopy } from "../../lib/roles";
-import type { Equipment, ModalKind, PageData, Reservation, Stats, UserProfile, View, WorkOrder } from "../../lib/types";
+import { weekOverWeek, type WeekOverWeek } from "../../lib/trends";
+import type { Equipment, ModalKind, PageData, Reservation, Stats, Trends, UserProfile, View, WorkOrder } from "../../lib/types";
 import { categoryIcon, Icon, type IconName } from "../icons";
 import { Empty, StatusBadge } from "../ui";
 
@@ -12,6 +13,7 @@ const OPEN_WORK_ORDER = new Set(["SUBMITTED", "ASSIGNED", "IN_PROGRESS", "RESOLV
 export function DashboardView({
   user,
   stats,
+  trends = null,
   reservations,
   workorders,
   equipment,
@@ -24,6 +26,8 @@ export function DashboardView({
 }: {
   user: UserProfile;
   stats: Stats | null;
+  /** Optional: without it the cards just show their numbers. */
+  trends?: Trends | null;
   reservations: PageData<Reservation> | null;
   workorders: PageData<WorkOrder> | null;
   equipment: PageData<Equipment> | null;
@@ -35,6 +39,10 @@ export function DashboardView({
   onRefresh: () => void;
 }) {
   const copy = dashboardCopy(user.role, user.displayName);
+  const trend = (series: Parameters<typeof weekOverWeek>[1], caption: string): StatTrendProps | undefined => {
+    const data = weekOverWeek(trends, series);
+    return data ? { data, caption } : undefined;
+  };
   const reservationList = reservations?.content ?? [];
   const workorderList = workorders?.content ?? [];
   const equipmentById = new Map((equipment?.content ?? []).map((item) => [item.id, item]));
@@ -87,28 +95,28 @@ export function DashboardView({
 
     <section className="stat-grid" aria-label="角色指标">
       {user.role === "STUDENT" && <>
-        <StatCard icon="calendar" tone="orange" label="我的待审批" value={myPending.length} unit="条" note="跟踪审批进度" onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="clock" tone="amber" label="进行中预约" value={myActiveReservations.length} unit="条" note="含待批与已批准" onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="wrench" tone="coral" label="我的报修" value={workorders?.totalElements ?? workorderList.length} unit="条" note="故障进度可查" onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="calendar" tone="orange" label="我的待审批" value={myPending.length} unit="条" note="跟踪审批进度" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="clock" tone="amber" label="进行中预约" value={myActiveReservations.length} unit="条" note="含待批与已批准" trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="wrench" tone="coral" label="我的报修" value={workorders?.totalElements ?? workorderList.length} unit="条" note="故障进度可查" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
         <StatCard icon="microscope" tone="green" label="可预约设备" value={stats?.equipmentAvailable ?? 0} unit="台" note={`共 ${stats?.equipmentTotal ?? 0} 台在册`} onOpen={() => onViewChange("equipment")} />
       </>}
       {user.role === "TEACHER" && <>
-        <StatCard icon="calendar" tone="orange" label="待审批预约" value={stats?.reservationsPending ?? pendingApprovals.length} unit="条" note="优先处理申请" onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="clock" tone="amber" label="今日相关排期" value={stats?.reservationsToday ?? 0} unit="条" note={`已排期 ${stats?.reservationsApproved ?? 0} 条`} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="calendar" tone="orange" label="待审批预约" value={stats?.reservationsPending ?? pendingApprovals.length} unit="条" note="优先处理申请" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="clock" tone="amber" label="今日相关排期" value={stats?.reservationsToday ?? 0} unit="条" note={`已排期 ${stats?.reservationsApproved ?? 0} 条`} trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
         <StatCard icon="microscope" tone="green" label="可预约设备" value={stats?.equipmentAvailable ?? 0} unit="台" note={`维护中 ${stats?.equipmentMaintenance ?? 0} 台`} onOpen={() => onViewChange("equipment")} />
-        <StatCard icon="wrench" tone="coral" label="故障动态" value={stats?.workOrdersOpen ?? 0} unit="条" note={`紧急 ${stats?.workOrdersUrgent ?? 0} 条`} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="wrench" tone="coral" label="故障动态" value={stats?.workOrdersOpen ?? 0} unit="条" note={`紧急 ${stats?.workOrdersUrgent ?? 0} 条`} trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
       </>}
       {user.role === "TECHNICIAN" && <>
-        <StatCard icon="inbox" tone="coral" label="待接单池" value={claimPool.length} unit="条" note="可主动接单" onOpen={() => onViewChange("workorders")} />
-        <StatCard icon="wrench" tone="amber" label="我的处理中" value={myInProgress.length} unit="条" note="派给自己的在办单" onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="inbox" tone="coral" label="待接单池" value={claimPool.length} unit="条" note="可主动接单" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="wrench" tone="amber" label="我的处理中" value={myInProgress.length} unit="条" note="派给自己的在办单" trend={trend("workOrdersResolved", "近7天解决")} onOpen={() => onViewChange("workorders")} />
         <StatCard icon="microscope" tone="graphite" label="维护中设备" value={stats?.equipmentMaintenance ?? 0} unit="台" note={`共 ${stats?.equipmentTotal ?? 0} 台在册`} onOpen={() => onViewChange("equipment")} />
         <StatCard icon="alert" tone="orange" label="紧急/高优" value={urgentOrders.length || (stats?.workOrdersUrgent ?? 0)} unit="条" note="优先恢复可用" onOpen={() => onViewChange("workorders")} />
       </>}
       {user.role === "ADMIN" && <>
         <StatCard icon="clipboard" tone="graphite" label="设备在册" value={stats?.equipmentTotal ?? 0} unit="台" note={`可预约 ${stats?.equipmentAvailable ?? 0} 台`} onOpen={() => onViewChange("equipment")} />
-        <StatCard icon="calendar" tone="orange" label="待审批预约" value={stats?.reservationsPending ?? 0} unit="条" note={`已排期 ${stats?.reservationsApproved ?? 0} 条`} onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="wrench" tone="coral" label="开放工单" value={stats?.workOrdersOpen ?? 0} unit="条" note={`紧急 ${stats?.workOrdersUrgent ?? 0} 条`} onOpen={() => onViewChange("workorders")} />
-        <StatCard icon="receipt" tone="amber" label="待处理差账" value={stats?.paymentDiscrepanciesOpen ?? 0} unit="笔" note="对账自动生成，人工核对" onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="calendar" tone="orange" label="待审批预约" value={stats?.reservationsPending ?? 0} unit="条" note={`已排期 ${stats?.reservationsApproved ?? 0} 条`} trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="wrench" tone="coral" label="开放工单" value={stats?.workOrdersOpen ?? 0} unit="条" note={`紧急 ${stats?.workOrdersUrgent ?? 0} 条`} trend={trend("workOrdersCreated", "近7天新建")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="receipt" tone="amber" label="待处理差账" value={stats?.paymentDiscrepanciesOpen ?? 0} unit="笔" note="对账自动生成，人工核对" trend={trend("paymentDiscrepanciesCreated", "近7天新增")} onOpen={() => onViewChange("workorders")} />
       </>}
     </section>
 
@@ -195,8 +203,8 @@ export function DashboardView({
   </div>;
 }
 
-function StatCard({ icon, tone, label, value, unit, note, onOpen }: {
-  icon: IconName; tone: Tone; label: string; value: number; unit: string; note: string; onOpen: () => void;
+function StatCard({ icon, tone, label, value, unit, note, trend, onOpen }: {
+  icon: IconName; tone: Tone; label: string; value: number; unit: string; note: string; trend?: StatTrendProps; onOpen: () => void;
 }) {
   return <article className="stat-card">
     <span className={`stat-icon tone-${tone}`}><Icon name={icon} size={24} /></span>
@@ -205,8 +213,57 @@ function StatCard({ icon, tone, label, value, unit, note, onOpen }: {
       <strong>{value.toLocaleString("zh-CN")}<em>{unit}</em></strong>
       <p>{note}</p>
     </div>
+    {/* Spans the full card width: next to the number it gets cut off on mid-size screens. */}
+    {trend && <StatTrend {...trend} unit={unit} />}
     <button type="button" className="stat-open" onClick={onOpen} aria-label={`查看${label}`}><Icon name="chevron" size={18} /></button>
   </article>;
+}
+
+type StatTrendProps = { data: WeekOverWeek; caption: string };
+
+const BAR_WIDTH = 6;
+const BAR_GAP = 3;
+const CHART_HEIGHT = 24;
+
+/** Last 7 days as bars, plus the change against the 7 days before. */
+function StatTrend({ data, caption, unit }: StatTrendProps & { unit: string }) {
+  const max = Math.max(1, ...data.bars);
+  const width = data.bars.length * (BAR_WIDTH + BAR_GAP) - BAR_GAP;
+  const { change } = data;
+  const changeText = change.kind === "flat" ? "持平"
+    : change.kind === "new" ? "新增"
+      : `${change.percent}%`;
+  const summary = `${caption} ${data.current} ${unit}，前7天 ${data.previous} ${unit}`;
+  return <div className="stat-trend">
+    <svg className="spark" width={width} height={CHART_HEIGHT} viewBox={`0 0 ${width} ${CHART_HEIGHT}`} role="img" aria-label={summary}>
+      {data.bars.map((count, index) => {
+        // Zero days keep a 2px stub so an empty day still reads as a day.
+        const height = count === 0 ? 2 : Math.max(3, Math.round((count / max) * CHART_HEIGHT));
+        return <rect
+          key={data.days[index]}
+          className={count === 0 ? "spark-empty" : "spark-bar"}
+          x={index * (BAR_WIDTH + BAR_GAP)}
+          y={CHART_HEIGHT - height}
+          width={BAR_WIDTH}
+          height={height}
+          rx={count === 0 ? 1 : 2}
+        ><title>{`${dayTitle(data.days[index])} ${count} ${unit}`}</title></rect>;
+      })}
+    </svg>
+    <span className="trend-text">
+      {caption} <b>{data.current}</b>
+      <span className={`trend-change trend-${change.kind}`} title={`较前7天（${data.previous} ${unit}）`}>
+        {(change.kind === "up" || change.kind === "down") && <Icon name={change.kind === "up" ? "arrowUp" : "arrowDown"} size={12} />}
+        {changeText}
+      </span>
+    </span>
+  </div>;
+}
+
+/** "2026-10-17" -> "10月17日" without going through Date (no time-zone shift). */
+function dayTitle(day: string) {
+  const [, month, date] = day.split("-").map(Number);
+  return `${month}月${date}日`;
 }
 
 function Panel({ icon, title, action, onAction, children }: {
