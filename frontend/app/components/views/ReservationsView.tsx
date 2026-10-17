@@ -13,9 +13,9 @@ const clock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(
 
 const kindLabels: Record<ScheduleBlock["kind"], string> = { pending: "待审批", occupied: "已占用", done: "已完成" };
 
-function ReservationSchedule({ schedule, equipment, now }: { schedule: PageData<Reservation> | null; equipment: Equipment[]; now: Date }) {
+function ReservationSchedule({ schedule, equipment, now }: { schedule: Reservation[] | null; equipment: Equipment[]; now: Date }) {
   const [equipmentId, setEquipmentId] = useState("");
-  const all = schedule?.content ?? [];
+  const all = schedule ?? [];
   const visible = equipmentId ? all.filter((item) => String(item.equipmentId) === equipmentId) : all;
   const week = buildWeekSchedule(visible, now);
   const [fromHour, toHour] = week.hours;
@@ -23,7 +23,6 @@ function ReservationSchedule({ schedule, equipment, now }: { schedule: PageData<
   const height = (toHour - fromHour) * hourPx;
   const equipmentById = new Map(equipment.map((item) => [item.id, item]));
   const nowMinute = now.getHours() * 60 + now.getMinutes();
-  const truncated = schedule ? schedule.totalElements > schedule.content.length : false;
   const top = (minute: number) => ((Math.max(minute, fromHour * 60) - fromHour * 60) / 60) * hourPx;
 
   return <section className="panel schedule-panel">
@@ -39,7 +38,6 @@ function ReservationSchedule({ schedule, equipment, now }: { schedule: PageData<
         </select>
       </div>
     </header>
-    {truncated && <p className="schedule-note">这 7 天预约较多，只显示了前 {schedule?.content.length} 条，可按设备筛选查看。</p>}
     {week.blocks.length === 0
       ? <Empty text={equipmentId ? "这台设备未来 7 天还没有预约" : "未来 7 天还没有预约"} />
       : <div className="schedule-scroll">
@@ -87,7 +85,7 @@ function ReservationSchedule({ schedule, equipment, now }: { schedule: PageData<
 export function ReservationsView({ user, reservations, scheduleReservations, equipment, filter, canApprove, onFilterChange, onLoad, onCreate, onDecide, onCancel, onComplete }: {
   user: UserProfile;
   reservations: PageData<Reservation> | null;
-  scheduleReservations: PageData<Reservation> | null;
+  scheduleReservations: Reservation[] | null;
   equipment: PageData<Equipment> | null;
   filter: string;
   canApprove: boolean;

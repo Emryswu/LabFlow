@@ -97,7 +97,7 @@ function renderView(t, { reservations = [], schedule = [] } = {}) {
   t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-19T09:30:00+08:00").getTime() });
   const { ReservationsView } = load("components/views/ReservationsView.tsx");
   return renderToStaticMarkup(React.createElement(ReservationsView, {
-    user: teacher, reservations: page(reservations), scheduleReservations: page(schedule), equipment,
+    user: teacher, reservations: page(reservations), scheduleReservations: schedule, equipment,
     filter: "", canApprove: true, onFilterChange() {}, onLoad() {}, onCreate() {}, onDecide() {}, onCancel() {}, onComplete() {},
   }));
 }

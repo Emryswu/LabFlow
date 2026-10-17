@@ -1,15 +1,8 @@
 import type { Reservation, ReservationConflict } from "./types";
-
-const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-
-function rangeText(conflict: ReservationConflict) {
-  const start = new Date(conflict.startTime);
-  const end = new Date(conflict.endTime);
-  return `${start.getMonth() + 1}月${start.getDate()}日 ${clock(start)}–${clock(end)}`;
-}
+import { formatDateRange } from "./labels";
 
 function describe(conflict: ReservationConflict) {
-  return `#${conflict.id}${conflict.requesterName ? ` ${conflict.requesterName}` : ""} ${rangeText(conflict)}`;
+  return `#${conflict.id}${conflict.requesterName ? ` ${conflict.requesterName}` : ""} ${formatDateRange(conflict.startTime, conflict.endTime)}`;
 }
 
 export type ConflictSummary = {

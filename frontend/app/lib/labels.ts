@@ -29,3 +29,13 @@ export const formatDate = (value?: string | null) => value
   ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value))
   : "—";
 
+export function formatDateRange(start: string, end: string, dayLabel = (date: Date) => `${date.getMonth() + 1}月${date.getDate()}日`) {
+  const from = new Date(start);
+  const to = new Date(end);
+  const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const sameDay = from.getFullYear() === to.getFullYear()
+    && from.getMonth() === to.getMonth()
+    && from.getDate() === to.getDate();
+  return `${dayLabel(from)} ${clock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${clock(to)}`;
+}
+

@@ -134,16 +134,24 @@ for (const [name, startTime, endTime, expected] of [
   ["month boundary", "2026-10-31T23:00:00+08:00", "2026-11-01T02:00:00+08:00", "10月31日 23:00–11月1日 02:00"],
   ["year boundary", "2026-12-31T23:00:00+08:00", "2027-01-01T02:00:00+08:00", "12月31日 23:00–1月1日 02:00"],
 ]) {
-  test(`dashboard approval shows the reservation range across ${name}`, (t) => {
+  test(`dashboard and conflict hints show the reservation range across ${name}`, (t) => {
     t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-17T12:00:00+08:00").getTime() });
     const { DashboardView } = loadComponent("components/views/DashboardView.tsx");
+    const pending = { ...reservation, startTime, endTime, conflictsWith: [{ id: 101, startTime, endTime, status: "APPROVED", requesterName: "占用人" }] };
     const html = renderToStaticMarkup(React.createElement(DashboardView, {
-      user, stats: null, reservations: page([{ ...reservation, startTime, endTime }]),
+      user, stats: null, reservations: page([pending]),
       workorders: page([]), equipment: page(equipment), busy: false, canApprove: true,
       onViewChange() {}, onOpenCreate() {}, onDecide() {}, onRefresh() {},
     }));
     assert.ok(html.includes(expected), `Missing full reservation range: ${expected}`);
     assert.ok(html.includes(">通过</button>"), "Test must exercise the approval card");
+    assert.ok(html.includes(`与 #101 占用人 ${expected} 冲突`), "Dashboard conflict must include both dates");
+    const { ReservationsView } = loadComponent("components/views/ReservationsView.tsx");
+    const list = renderToStaticMarkup(React.createElement(ReservationsView, {
+      user, reservations: page([pending]), scheduleReservations: [], equipment: page(equipment),
+      filter: "", canApprove: true, onFilterChange() {}, onLoad() {}, onCreate() {}, onDecide() {}, onCancel() {}, onComplete() {},
+    }));
+    assert.ok(list.includes(`与 #101 占用人 ${expected} 冲突`), "List conflict must include both dates");
   });
 }
 
@@ -377,3 +385,81 @@ test("the reservation calendar asks only for the 7 days it draws", async (t) => 
   assert.equal(query.get("sort"), "startTime,asc");
   await waitFor(() => container.textContent.includes("未来 7 天还没有预约"));
 });
+
+
+for (const failsLaterPage of [false, true]) {
+  test(`calendar ${failsLaterPage ? "reports a later-page error instead of publishing a partial week" : "loads every page before equipment filtering"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-19T12:00:00+08:00").getTime() });
+    const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
+    const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
+    const previous = Object.fromEntries(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    for (const [key, value] of Object.entries(globals)) {
+      Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+    }
+    const container = document.getElementById("root");
+    const root = createRoot(container);
+    t.after(async () => {
+      await act(async () => root.unmount());
+      dom.window.close();
+      for (const key of Object.keys(globals)) {
+        if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+        else delete globalThis[key];
+      }
+    });
+
+    const bookings = Array.from({ length: 201 }, (_, index) => ({
+      ...reservation, id: index + 1, equipmentId: index === 200 ? 2 : 1, status: "PAID",
+      startTime: "2026-10-20T10:00:00+08:00", endTime: "2026-10-20T11:00:00+08:00",
+    }));
+    let listener;
+    const requests = [];
+    const { default: Home } = loadComponent("page.tsx", {
+      subscribeSession: (next) => { listener = next; return () => {}; },
+      clearLegacyAuthStorage() {},
+      refreshSession: async () => listener({ accessToken: "test-token", user }),
+      api: async (path, token, options) => {
+        const url = new URL(path, "http://localhost/");
+        switch (url.pathname) {
+          case "/api/dashboard/stats": return {};
+          case "/api/dashboard/trends": return null;
+          case "/api/work-orders": return page([]);
+          case "/api/equipment": return page(equipment);
+          case "/api/reservations": {
+            if (!url.searchParams.has("from")) return page([]);
+            const index = Number(url.searchParams.get("page") ?? 0);
+            requests.push({ query: url.searchParams, token, signal: options.signal });
+            if (failsLaterPage && index === 1) throw new Error("排期第二页加载失败");
+            return { content: bookings.slice(index * 100, (index + 1) * 100), page: index, size: 100, totalElements: bookings.length, totalPages: 3 };
+          }
+          default: throw new Error(`Unexpected API request: ${path}`);
+        }
+      },
+    });
+
+    await act(async () => root.render(React.createElement(Home)));
+    await waitFor(() => container.querySelector('[data-nav="reservations"]'));
+    await act(async () => container.querySelector('[data-nav="reservations"]').click());
+    await waitFor(() => container.querySelector(".week-block") || container.textContent.includes("排期第二页加载失败"));
+    if (failsLaterPage) {
+      assert.ok(container.textContent.includes("排期第二页加载失败"), "Must expose the error instead of silently using page one");
+      assert.equal(container.querySelectorAll(".week-block").length, 0);
+      return;
+    }
+    const select = container.querySelector('[aria-label="按设备筛选排期"]');
+    await act(async () => {
+      select.value = "2";
+      select.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+    assert.equal(container.querySelectorAll(".week-block").length, 1, "Device 2's paid booking is on page three");
+    assert.ok(container.querySelector(".week-block").textContent.includes("维修离心机"));
+    assert.ok(!container.textContent.includes("这台设备未来 7 天还没有预约"));
+    assert.deepEqual(requests.map(({ query }) => Number(query.get("page") ?? 0)), [0, 1, 2]);
+    for (const request of requests) {
+      assert.equal(request.query.get("from"), requests[0].query.get("from"));
+      assert.equal(request.query.get("to"), requests[0].query.get("to"));
+      assert.deepEqual(request.query.getAll("sort"), ["startTime,asc", "id,asc"], "Equal start times need stable pagination");
+      assert.equal(request.token, "test-token");
+      assert.equal(request.signal, requests[0].signal, "Every page belongs to the same cancellable session request");
+    }
+  });
+}

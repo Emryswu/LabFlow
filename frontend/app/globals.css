@@ -343,7 +343,6 @@ tbody tr:hover { background: #faf8f5; }
 .legend-occupied { background: var(--orange); }
 .legend-pending { border: 1.5px dashed #c97a1c; background: #fff6e8; }
 .legend-conflict { border: 1.5px dashed var(--danger); background: #fff3f2; }
-.schedule-note { margin: 0; padding: 10px 20px; color: var(--accent-text); background: var(--soft-accent); font-size: 13px; }
 .schedule-scroll { width: 100%; max-width: 100%; overflow-x: auto; padding: 4px 20px 20px; }
 .week { display: grid; grid-template-columns: 52px repeat(7, minmax(108px, 1fr)); grid-template-rows: auto var(--week-height); min-width: 820px; }
 .week-corner { border-bottom: 1px solid var(--line); }

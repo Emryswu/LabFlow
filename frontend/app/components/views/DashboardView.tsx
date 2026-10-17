@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { roleLabels, statusLabels } from "../../lib/labels";
+import { formatDateRange, roleLabels, statusLabels } from "../../lib/labels";
 import { dashboardCopy } from "../../lib/roles";
 import { conflictSummary } from "../../lib/conflicts";
 import { weekOverWeek, type WeekOverWeek } from "../../lib/trends";
@@ -299,7 +299,7 @@ function ReservationRow({ item, equipment, action }: { item: Reservation; equipm
       {conflict && <small className="conflict-note" title={conflict.detail}><Icon name="alert" size={12} />{conflict.text}</small>}
     </div>
     <div className="row-meta">
-      <span>{formatRange(item.startTime, item.endTime)}</span>
+      <span>{formatDateRange(item.startTime, item.endTime, dayLabel)}</span>
       <small>{item.requesterName}</small>
     </div>
     <div className="row-action">{action}</div>
@@ -425,15 +425,6 @@ function dayLabel(date: Date) {
 }
 
 const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-
-function formatRange(start: string, end: string) {
-  const from = new Date(start);
-  const to = new Date(end);
-  const sameDay = from.getFullYear() === to.getFullYear()
-    && from.getMonth() === to.getMonth()
-    && from.getDate() === to.getDate();
-  return `${dayLabel(from)} ${clock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${clock(to)}`;
-}
 
 function formatMoment(value: string) {
   const date = new Date(value);
