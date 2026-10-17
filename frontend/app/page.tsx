@@ -41,6 +41,7 @@ export default function Home() {
   const [workorderFilter, setWorkorderFilter] = useState("");
   const appliedEquipmentFilter = useRef(equipmentFilter);
   const equipmentRequestSequence = useRef(0);
+  const trendsRequestSequence = useRef(0);
   const [equipmentForm, setEquipmentForm] = useState<EquipmentForm>(emptyEquipmentForm);
   const [reservationForm, setReservationForm] = useState<ReservationForm>(emptyReservationForm);
   const [workorderForm, setWorkorderForm] = useState<WorkOrderForm>(emptyWorkorderForm);
@@ -86,6 +87,24 @@ export default function Home() {
     setWorkorderForm(emptyWorkorderForm);
   }, []);
 
+  // Own lifecycle: optional charts must not keep page loading or approval busy.
+  const loadTrends = useCallback(async (token: string) => {
+    const generation = sessionGeneration.current;
+    const requestSequence = ++trendsRequestSequence.current;
+    const controller = new AbortController();
+    activeSessionRequests.current.add(controller);
+    try {
+      const data = await api<Trends>("/api/dashboard/trends", token, { signal: controller.signal })
+        .catch(() => null);
+      if (generation === sessionGeneration.current && !controller.signal.aborted
+        && requestSequence === trendsRequestSequence.current) {
+        setTrends(data);
+      }
+    } finally {
+      activeSessionRequests.current.delete(controller);
+    }
+  }, []);
+
   const load = useCallback(async (target: View, token = accessToken) => {
     if (!token) return;
     const generation = sessionGeneration.current;
@@ -96,10 +115,7 @@ export default function Home() {
     setPageLoading(true);
     try {
       if (target === "dashboard") {
-        // Trends only decorate the stat cards: a failure leaves the cards without
-        // a chart instead of failing the whole dashboard.
-        const trendsRequest = api<Trends>("/api/dashboard/trends", token, { signal: controller.signal })
-          .catch(() => null);
+        void loadTrends(token);
         const [statsData, reservationData, workorderData, equipmentData] = await Promise.all([
           api<Stats>("/api/dashboard/stats", token, { signal: controller.signal }),
           api<PageData<Reservation>>("/api/reservations?size=12&sort=createdAt,desc", token, { signal: controller.signal }),
@@ -112,9 +128,6 @@ export default function Home() {
         setReservations(reservationData);
         setWorkorders(workorderData);
         setDashboardEquipment(equipmentData);
-        const trendsData = await trendsRequest;
-        if (!isCurrentSessionRequest()) return;
-        setTrends(trendsData);
       } else if (target === "equipment") {
         const requestSequence = ++equipmentRequestSequence.current;
         const filter = appliedEquipmentFilter.current;
@@ -154,7 +167,7 @@ export default function Home() {
       activeSessionRequests.current.delete(controller);
       if (isCurrentSessionRequest()) setPageLoading(false);
     }
-  }, [accessToken, reservationFilter, workorderFilter, notify]);
+  }, [accessToken, reservationFilter, workorderFilter, notify, loadTrends]);
 
   // Keep React accessToken in sync when api() silently refreshes the HttpOnly-cookie session.
   // This is the single place that reacts to a session change, so every path that ends a

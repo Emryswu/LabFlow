@@ -23,6 +23,7 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 - 没有单独的 lint 步骤。
 - 默认 profile 走 H2、进程内锁和本地定时器，不需要 MySQL、Redis、RabbitMQ。
 - MySQL 并发回归（`RefreshTokenMysqlConcurrencyTest`、`PaymentRequestMysqlConcurrencyTest`、`MysqlCriticalConcurrencyRegressionTest`）用 Testcontainers，本机没有 Docker 时会被跳过；CI 会检查它们真的跑过、没有 skipped。
+- MySQL 趋势查询计划回归（`DashboardTrendIndexMysqlTest`）同样用 Testcontainers；CI 必须确认已执行，防止索引缺失被跳过的测试掩盖。
 - `RabbitReservationExpiryOrderingIntegrationTest` 要连 `127.0.0.1:5672`，连不上整类跳过；CI 用 RabbitMQ service 让它真正执行。
 - CI 另有「后端 · 无 Docker」job，关掉 Docker 再跑一遍 `verify`：新加的 Testcontainers 用例在没有 Docker 时必须跳过，不能报错。
 

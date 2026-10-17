@@ -247,3 +247,81 @@ for (const [name, trendsResponse, expectedTrends] of [
     assert.equal(container.querySelector(".toast.error"), null, "A trends failure is not worth an error toast");
   });
 }
+
+for (const scenario of ["approval", "newer refresh", "session change"]) {
+  test(`slow trends stay independent of ${scenario}`, async (t) => {
+    const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
+    const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
+    const previous = Object.fromEntries(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    for (const [key, value] of Object.entries(globals)) {
+      Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+    }
+    const container = document.getElementById("root");
+    const root = createRoot(container);
+    t.after(async () => {
+      await act(async () => root.unmount());
+      dom.window.close();
+      for (const key of Object.keys(globals)) {
+        if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+        else delete globalThis[key];
+      }
+    });
+
+    let listener;
+    let decisionSucceeded = false;
+    let trendRequests = 0;
+    let slowSignal;
+    let releaseTrends;
+    const slowTrends = new Promise((resolve) => { releaseTrends = resolve; });
+    const staleTrends = { ...trendsFixture, reservationsCreated: Array(14).fill(9) };
+    const { default: Home } = loadComponent("page.tsx", {
+      subscribeSession: (next) => { listener = next; return () => {}; },
+      clearLegacyAuthStorage() {},
+      refreshSession: async () => listener({ accessToken: "test-token", user }),
+      api: async (path, _token, init) => {
+        const url = new URL(path, "http://localhost/");
+        switch (url.pathname) {
+          case "/api/dashboard/stats": return { equipmentTotal: 2, equipmentAvailable: 1, reservationsPending: decisionSucceeded ? 1 : 2 };
+          case "/api/dashboard/trends":
+            trendRequests++;
+            if ((scenario === "approval" && decisionSucceeded) || (scenario !== "approval" && trendRequests === 1)) {
+              slowSignal = init.signal;
+              return slowTrends;
+            }
+            return trendsFixture;
+          case "/api/reservations/1/decision": decisionSucceeded = true; return {};
+          case "/api/reservations": return page([
+            { ...reservation, status: decisionSucceeded ? "APPROVED" : "PENDING" },
+            { ...reservation, id: 2 },
+          ]);
+          case "/api/work-orders": return page([]);
+          case "/api/equipment": return page(equipment);
+          default: throw new Error(`Unexpected API request: ${path}`);
+        }
+      },
+    });
+
+    await act(async () => root.render(React.createElement(Home)));
+    await waitFor(() => container.querySelectorAll(".decision .solid-button").length === 2);
+    if (scenario === "approval") {
+      await act(async () => container.querySelector(".decision .solid-button").click());
+      await waitFor(() => decisionSucceeded && container.querySelectorAll(".decision .solid-button").length === 1);
+      assert.equal(container.querySelector(".decision .solid-button").disabled, false,
+        "A pending decorative request must not block the next approval");
+      assert.equal(container.querySelector(".loading-bar"), null);
+    } else {
+      if (scenario === "newer refresh") {
+        await act(async () => container.querySelector(".hero-chips button").click());
+      } else {
+        await act(async () => listener({ accessToken: "next-token", user: { ...user, id: 2, username: "teacher2" } }));
+        assert.equal(slowSignal.aborted, true, "Session reset must abort independent trend requests too");
+      }
+      await waitFor(() => trendRequests === 2 && container.querySelector(".trend-text b")?.textContent === "6");
+    }
+
+    // Resolve even after abort: a late network response must still be ignored.
+    await act(async () => { releaseTrends(staleTrends); await slowTrends; });
+    const expected = scenario === "approval" ? "63" : "6";
+    assert.equal(container.querySelector(".trend-text b").textContent, expected);
+  });
+}

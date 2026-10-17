@@ -151,6 +151,25 @@ jobs:
           print(f"MySQL 关键并发回归已执行：{len(cases)} 项全部通过，无 skipped")
           PY
 
+      - name: 确认 MySQL 趋势查询计划回归已执行
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          report = Path("target/surefire-reports/TEST-com.arthur.labops.DashboardTrendIndexMysqlTest.xml")
+          if not report.is_file():
+              raise SystemExit("缺少 MySQL 趋势查询计划测试报告")
+          suite = ET.parse(report).getroot()
+          cases = suite.findall("testcase")
+          bad = [case.attrib.get("name") for case in cases
+                 if any(case.find(tag) is not None for tag in ("skipped", "failure", "error"))]
+          if not cases or bad or any(int(suite.get(tag, "0")) for tag in ("skipped", "failures", "errors")):
+              raise SystemExit(f"MySQL 趋势查询计划回归未完整通过：bad={bad}, totals={suite.attrib}")
+          print(f"MySQL 趋势查询计划回归已执行：{len(cases)} 项全部通过，无 skipped")
+          PY
+
       # 失败时同样上传，否则排查 CI 红灯只能靠日志里被截断的堆栈
       - name: 上传测试报告
         if: always()
