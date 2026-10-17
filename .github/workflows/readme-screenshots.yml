@@ -1,0 +1,59 @@
+# Temporary: takes the README screenshots from a real running stack (H2 profile + demo seed)
+# and commits them back to this branch. Removed again before the PR.
+name: README screenshots
+
+on:
+  push:
+    branches: ["tmp/readme-screenshots"]
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 中文字体
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - name: 打包后端
+        run: ./mvnw -B --no-transfer-progress -DskipTests package
+      - name: 启动后端（默认 H2 profile + 演示种子）
+        run: |
+          nohup java -jar target/*.jar --server.port=18080 > backend.log 2>&1 &
+          for i in $(seq 1 90); do curl -fs http://127.0.0.1:18080/actuator/health && break; sleep 2; done
+          curl -fs http://127.0.0.1:18080/actuator/health
+      - name: 启动前端
+        working-directory: frontend
+        env:
+          BACKEND_BASE_URL: http://127.0.0.1:18080
+        run: |
+          npm ci --no-audit --no-fund
+          nohup npx vinext dev --port 13000 --host 127.0.0.1 > ../frontend.log 2>&1 &
+          for i in $(seq 1 90); do curl -fs -o /dev/null http://127.0.0.1:13000/ && break; sleep 2; done
+      - name: 截图
+        run: |
+          mkdir -p /tmp/shots && cd /tmp/shots
+          npm init -y > /dev/null && npm i --no-audit --no-fund playwright@1.56.0 > /dev/null
+          npx playwright install --with-deps chromium > /dev/null
+          node "$GITHUB_WORKSPACE/.github/screenshots/take.mjs" "$GITHUB_WORKSPACE/docs/screenshots"
+      - name: 失败时打印日志
+        if: failure()
+        run: tail -n 80 backend.log frontend.log || true
+      - name: 提交截图
+        run: |
+          git config user.name "Emrys"
+          git config user.email "219520811+Emryswu@users.noreply.github.com"
+          git add docs/screenshots
+          git commit -m "docs(readme): 截图（CI 实拍）"
+          git push
