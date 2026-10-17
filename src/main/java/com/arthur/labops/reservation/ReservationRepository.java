@@ -31,6 +31,26 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long>,
             @Param("requestedStart") Instant requestedStart,
             @Param("excludeId") Long excludeId);
 
+    /**
+     * Read-only counterpart of {@link #findConflictsForUpdate} for a whole page of
+     * pending requests at once: every slot-holder on these devices that touches the
+     * window. The caller narrows each candidate down with {@link Reservation#overlaps}.
+     */
+    @Query("""
+            select reservation
+            from Reservation reservation
+            where reservation.equipment.id in :equipmentIds
+              and reservation.status in :statuses
+              and reservation.startTime < :windowEnd
+              and reservation.endTime > :windowStart
+            order by reservation.startTime, reservation.id
+            """)
+    java.util.List<Reservation> findOverlappingCandidates(
+            @Param("equipmentIds") Collection<Long> equipmentIds,
+            @Param("statuses") Collection<ReservationStatus> statuses,
+            @Param("windowEnd") Instant windowEnd,
+            @Param("windowStart") Instant windowStart);
+
     boolean existsByEquipmentIdAndStatusInAndStartTimeLessThanEqualAndEndTimeGreaterThan(
             Long equipmentId,
             Collection<ReservationStatus> statuses,

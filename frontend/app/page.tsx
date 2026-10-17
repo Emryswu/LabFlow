@@ -18,6 +18,29 @@ const emptyEquipmentForm: EquipmentForm = { code: "", name: "", category: "", lo
 const emptyReservationForm: ReservationForm = { equipmentId: "", purpose: "", startTime: "", endTime: "" };
 const emptyWorkorderForm: WorkOrderForm = { equipmentId: "", title: "", description: "", priority: "MEDIUM" };
 
+function scheduleQuery(now = new Date()) {
+  const from = new Date(now);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(from);
+  to.setDate(to.getDate() + 7);
+  const query = new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), size: "100", sort: "startTime,asc" });
+  query.append("sort", "id,asc");
+  return query;
+}
+
+// The calendar filters locally, so publish the week only after every page succeeds.
+async function loadSchedule(token: string, signal: AbortSignal): Promise<Reservation[]> {
+  const query = scheduleQuery();
+  const first = await api<PageData<Reservation>>(`/api/reservations?${query}`, token, { signal });
+  const reservations = [...first.content];
+  for (let page = 1; page < first.totalPages; page += 1) {
+    query.set("page", String(page));
+    const next = await api<PageData<Reservation>>(`/api/reservations?${query}`, token, { signal });
+    reservations.push(...next.content);
+  }
+  return reservations;
+}
+
 export default function Home() {
   const [accessToken, setAccessToken] = useState("");
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -31,7 +54,7 @@ export default function Home() {
   const [equipment, setEquipment] = useState<PageData<Equipment> | null>(null);
   const [dashboardEquipment, setDashboardEquipment] = useState<PageData<Equipment> | null>(null);
   const [reservations, setReservations] = useState<PageData<Reservation> | null>(null);
-  const [scheduleReservations, setScheduleReservations] = useState<PageData<Reservation> | null>(null);
+  const [scheduleReservations, setScheduleReservations] = useState<Reservation[] | null>(null);
   const [workorders, setWorkorders] = useState<PageData<WorkOrder> | null>(null);
   const [auditLogs, setAuditLogs] = useState<PageData<AuditLog> | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -143,7 +166,7 @@ export default function Home() {
         if (reservationFilter) query.set("status", reservationFilter);
         const [reservationData, scheduleData, equipmentData] = await Promise.all([
           api<PageData<Reservation>>(`/api/reservations?${query}`, token, { signal: controller.signal }),
-          api<PageData<Reservation>>("/api/reservations?size=100&sort=startTime,asc", token, { signal: controller.signal }),
+          loadSchedule(token, controller.signal),
           api<PageData<Equipment>>("/api/equipment?size=100&sort=name,asc", token, { signal: controller.signal }),
         ]);
         if (!isCurrentSessionRequest()) return;

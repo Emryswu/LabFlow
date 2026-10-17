@@ -1,6 +1,7 @@
 package com.arthur.labops.reservation;
 
 import java.time.Instant;
+import java.util.List;
 
 public record ReservationResponse(
         Long id,
@@ -13,9 +14,19 @@ public record ReservationResponse(
         ReservationStatus status,
         Instant createdAt,
         Instant expiresAt,
-        Instant paymentDeadline
+        Instant paymentDeadline,
+        /**
+         * Only for PENDING reservations, and only filled by the list endpoint:
+         * slot-holding reservations this request overlaps. Non-empty means
+         * approving it now would be rejected with RESERVATION_CONFLICT.
+         */
+        List<ReservationConflict> conflictsWith
 ) {
     static ReservationResponse from(Reservation reservation) {
+        return from(reservation, List.of());
+    }
+
+    static ReservationResponse from(Reservation reservation, List<ReservationConflict> conflictsWith) {
         return new ReservationResponse(
                 reservation.getId(),
                 reservation.getEquipment().getId(),
@@ -27,6 +38,7 @@ public record ReservationResponse(
                 reservation.getStatus(),
                 reservation.getCreatedAt(),
                 reservation.getExpiresAt(),
-                reservation.getPaymentDeadline());
+                reservation.getPaymentDeadline(),
+                conflictsWith);
     }
 }

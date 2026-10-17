@@ -55,14 +55,14 @@ export function workspaceTitle(role: Role, view: View): string {
 export function workspaceEyebrow(role: Role): string {
   switch (role) {
     case "STUDENT":
-      return "STUDENT DESK / 学生实验助手";
+      return "学生实验助手";
     case "TEACHER":
-      return "TEACHER DESK / 教师审批台";
+      return "教师审批台";
     case "TECHNICIAN":
-      return "TECH DESK / 维修作业台";
+      return "维修作业台";
     case "ADMIN":
     default:
-      return "LAB CONTROL DESK / 实验室运行台";
+      return "实验室运行台";
   }
 }
 

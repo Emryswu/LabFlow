@@ -7,6 +7,7 @@ export const roleLabels: Record<Role, string> = {
 export const statusLabels: Record<string, string> = {
   AVAILABLE: "可预约", IN_USE: "使用中", MAINTENANCE: "维护中", RETIRED: "已退役",
   PENDING: "待审批", APPROVED: "已批准", REJECTED: "已拒绝", CANCELLED: "已取消", EXPIRED: "已过期", COMPLETED: "已完成",
+  AWAITING_PAYMENT: "待支付", PAID: "已支付", REFUNDING: "退款中",
   SUBMITTED: "待派单", ASSIGNED: "已派单", IN_PROGRESS: "处理中", RESOLVED: "已解决", CLOSED: "已关闭",
   LOW: "低", MEDIUM: "中", HIGH: "高", URGENT: "紧急",
 };
@@ -27,4 +28,14 @@ export const actionLabels: Record<string, string> = {
 export const formatDate = (value?: string | null) => value
   ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value))
   : "—";
+
+export function formatDateRange(start: string, end: string, dayLabel = (date: Date) => `${date.getMonth() + 1}月${date.getDate()}日`) {
+  const from = new Date(start);
+  const to = new Date(end);
+  const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const sameDay = from.getFullYear() === to.getFullYear()
+    && from.getMonth() === to.getMonth()
+    && from.getDate() === to.getDate();
+  return `${dayLabel(from)} ${clock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${clock(to)}`;
+}
 

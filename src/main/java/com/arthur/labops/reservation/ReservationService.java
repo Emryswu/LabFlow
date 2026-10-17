@@ -1,6 +1,11 @@
 package com.arthur.labops.reservation;
 
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -279,9 +284,22 @@ public class ReservationService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ReservationResponse> findAll(ReservationStatus status, Long equipmentId, Pageable pageable) {
+    public Page<ReservationResponse> findAll(ReservationStatus status, Long equipmentId,
+                                             Instant from, Instant to, Pageable pageable) {
         PlatformUser actor = currentUserService.getRequiredUser();
+        if (from != null && to != null && !from.isBefore(to)) {
+            throw new BusinessException("INVALID_TIME_WINDOW", "开始时间必须早于结束时间", HttpStatus.BAD_REQUEST);
+        }
         Specification<Reservation> specification = (root, query, builder) -> builder.conjunction();
+        // Reservations touching [from, to): what a calendar for that window has to draw.
+        if (from != null) {
+            specification = specification.and((root, query, builder) ->
+                    builder.greaterThan(root.get("endTime"), from));
+        }
+        if (to != null) {
+            specification = specification.and((root, query, builder) ->
+                    builder.lessThan(root.get("startTime"), to));
+        }
         if (status != null) {
             specification = specification.and((root, query, builder) -> builder.equal(root.get("status"), status));
         }
@@ -298,7 +316,51 @@ public class ReservationService {
                     root.get("status").in(ReservationStatus.PENDING, ReservationStatus.APPROVED,
                             ReservationStatus.AWAITING_PAYMENT, ReservationStatus.PAID));
         }
-        return reservationRepository.findAll(specification, pageable).map(ReservationResponse::from);
+        Page<Reservation> page = reservationRepository.findAll(specification, pageable);
+        Map<Long, List<ReservationConflict>> conflicts = conflictsFor(page.getContent(), actor);
+        return page.map(reservation -> ReservationResponse.from(
+                reservation, conflicts.getOrDefault(reservation.getId(), List.of())));
+    }
+
+    /**
+     * One query for the whole page instead of one per pending row. Uses the same
+     * statuses and overlap rule as {@link #assertNoConflict}, so a non-empty list
+     * means approval would answer RESERVATION_CONFLICT right now. It is a hint,
+     * not a lock: approval still re-checks under the equipment row lock.
+     */
+    private Map<Long, List<ReservationConflict>> conflictsFor(List<Reservation> reservations, PlatformUser actor) {
+        List<Reservation> pending = reservations.stream()
+                .filter(reservation -> reservation.getStatus() == ReservationStatus.PENDING)
+                .toList();
+        if (pending.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> equipmentIds = pending.stream()
+                .map(reservation -> reservation.getEquipment().getId())
+                .collect(Collectors.toSet());
+        Instant windowStart = pending.stream().map(Reservation::getStartTime).min(Comparator.naturalOrder()).orElseThrow();
+        Instant windowEnd = pending.stream().map(Reservation::getEndTime).max(Comparator.naturalOrder()).orElseThrow();
+        List<Reservation> candidates = reservationRepository.findOverlappingCandidates(
+                equipmentIds, OCCUPIED_STATUSES, windowEnd, windowStart);
+
+        Map<Long, List<ReservationConflict>> result = new HashMap<>();
+        for (Reservation request : pending) {
+            Long equipmentId = request.getEquipment().getId();
+            List<ReservationConflict> clashes = candidates.stream()
+                    .filter(held -> held.getEquipment().getId().equals(equipmentId))
+                    .filter(held -> held.overlaps(request.getStartTime(), request.getEndTime()))
+                    .map(held -> new ReservationConflict(
+                            held.getId(), held.getStartTime(), held.getEndTime(), held.getStatus(),
+                            // Students only ever see their own reservations; a clash tells them
+                            // the slot is taken, not by whom.
+                            actor.getRole() == UserRole.STUDENT && !held.getRequesterId().equals(actor.getId())
+                                    ? null : held.getRequesterName()))
+                    .toList();
+            if (!clashes.isEmpty()) {
+                result.put(request.getId(), clashes);
+            }
+        }
+        return result;
     }
 
     /**

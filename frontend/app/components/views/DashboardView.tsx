@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { roleLabels, statusLabels } from "../../lib/labels";
+import { formatDateRange, roleLabels, statusLabels } from "../../lib/labels";
 import { dashboardCopy } from "../../lib/roles";
+import { conflictSummary } from "../../lib/conflicts";
 import { weekOverWeek, type WeekOverWeek } from "../../lib/trends";
 import type { Equipment, ModalKind, PageData, Reservation, Stats, Trends, UserProfile, View, WorkOrder } from "../../lib/types";
 import { categoryIcon, Icon, type IconName } from "../icons";
@@ -68,8 +69,14 @@ export function DashboardView({
     equipment={equipmentById.get(item.equipmentId)}
     action={withDecision && canApprove && item.status === "PENDING"
       ? <div className="decision">
-        <button type="button" className="ghost-button" disabled={busy} onClick={() => onDecide(item.id, "REJECTED")}>拒绝</button>
-        <button type="button" className="solid-button" disabled={busy} onClick={() => onDecide(item.id, "APPROVED")}>通过</button>
+        <button type="button" className="text-link" disabled={busy} onClick={() => onDecide(item.id, "REJECTED")}>拒绝</button>
+        <button
+          type="button"
+          className="solid-button"
+          disabled={busy || Boolean(conflictSummary(item))}
+          title={conflictSummary(item)?.detail}
+          onClick={() => onDecide(item.id, "APPROVED")}
+        >通过</button>
       </div>
       : <StatusBadge value={item.status} />}
   />;
@@ -283,14 +290,16 @@ function EquipThumb({ equipment }: { equipment?: Equipment }) {
 }
 
 function ReservationRow({ item, equipment, action }: { item: Reservation; equipment?: Equipment; action: ReactNode }) {
+  const conflict = conflictSummary(item);
   return <div className="row-item">
     <EquipThumb equipment={equipment} />
     <div className="row-main">
       <b>{equipment?.name ?? `设备 #${item.equipmentId}`}</b>
       <small>{equipment ? `${equipment.code} · ` : ""}{item.purpose}</small>
+      {conflict && <small className="conflict-note" title={conflict.detail}><Icon name="alert" size={12} />{conflict.text}</small>}
     </div>
     <div className="row-meta">
-      <span>{formatRange(item.startTime, item.endTime)}</span>
+      <span>{formatDateRange(item.startTime, item.endTime, dayLabel)}</span>
       <small>{item.requesterName}</small>
     </div>
     <div className="row-action">{action}</div>
@@ -416,15 +425,6 @@ function dayLabel(date: Date) {
 }
 
 const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-
-function formatRange(start: string, end: string) {
-  const from = new Date(start);
-  const to = new Date(end);
-  const sameDay = from.getFullYear() === to.getFullYear()
-    && from.getMonth() === to.getMonth()
-    && from.getDate() === to.getDate();
-  return `${dayLabel(from)} ${clock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${clock(to)}`;
-}
 
 function formatMoment(value: string) {
   const date = new Date(value);

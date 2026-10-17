@@ -24,7 +24,7 @@ export function Modal({ title, subtitle, onClose, children }: { title: string; s
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="modal" role="dialog" aria-modal="true" aria-label={title}>
       <header>
-        <div><span>LABFLOW · ACTION</span><h2>{title}</h2><p>{subtitle}</p></div>
+        <div><h2>{title}</h2><p>{subtitle}</p></div>
         <button className="icon-button" onClick={onClose} aria-label="关闭">×</button>
       </header>
       {children}

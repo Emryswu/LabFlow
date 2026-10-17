@@ -1,5 +1,7 @@
 package com.arthur.labops.reservation;
 
+import java.time.Instant;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -40,8 +42,11 @@ public class ReservationController {
     PageResponse<ReservationResponse> findAll(
             @RequestParam(required = false) ReservationStatus status,
             @RequestParam(required = false) Long equipmentId,
+            // ISO instants; together they select reservations touching [from, to).
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageResponse.from(reservationService.findAll(status, equipmentId, pageable));
+        return PageResponse.from(reservationService.findAll(status, equipmentId, from, to, pageable));
     }
 
     @PatchMapping("/{id}/decision")
