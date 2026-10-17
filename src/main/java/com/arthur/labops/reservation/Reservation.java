@@ -92,6 +92,15 @@ public class Reservation {
     public String getPurpose() { return purpose; }
     public Instant getStartTime() { return startTime; }
     public Instant getEndTime() { return endTime; }
+
+    /**
+     * Half-open overlap with {@code [start, end)}: back-to-back slots do not clash.
+     * Same rule as {@link ReservationRepository#findConflictsForUpdate}, which is
+     * what approval actually enforces.
+     */
+    public boolean overlaps(Instant start, Instant end) {
+        return startTime.isBefore(end) && endTime.isAfter(start);
+    }
     public ReservationStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getExpiresAt() { return expiresAt; }
