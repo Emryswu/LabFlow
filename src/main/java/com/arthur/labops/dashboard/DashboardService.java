@@ -12,6 +12,7 @@ import com.arthur.labops.equipment.EquipmentRepository;
 import com.arthur.labops.equipment.EquipmentStatus;
 import com.arthur.labops.reservation.ReservationRepository;
 import com.arthur.labops.reservation.ReservationStatus;
+import com.arthur.labops.reservation.ReservationStatuses;
 import com.arthur.labops.user.PlatformUserRepository;
 import com.arthur.labops.user.SystemAccountInitializer;
 import com.arthur.labops.workorder.FaultWorkOrderRepository;
@@ -57,7 +58,9 @@ public class DashboardService {
                 equipmentRepository.countByStatus(EquipmentStatus.RETIRED),
                 reservationRepository.countByStatus(ReservationStatus.PENDING),
                 reservationRepository.countByStatus(ReservationStatus.APPROVED),
-                reservationRepository.countByStartTimeBetween(dayStart, dayEnd),
+                // Only reservations still on the calendar, counted on [today 00:00, tomorrow 00:00).
+                reservationRepository.countByStartTimeGreaterThanEqualAndStartTimeLessThanAndStatusIn(
+                        dayStart, dayEnd, ReservationStatuses.SCHEDULED),
                 workOrderRepository.countByStatusIn(openStatuses),
                 workOrderRepository.countByPriorityAndStatusIn(WorkOrderPriority.URGENT, openStatuses),
                 // Discrepancy tickets the reconciliation job raised and nobody has closed yet.

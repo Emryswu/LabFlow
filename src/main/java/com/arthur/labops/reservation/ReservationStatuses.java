@@ -45,6 +45,22 @@ public final class ReservationStatuses {
             ReservationStatus.APPROVED,
             ReservationStatus.PAID));
 
+    /**
+     * Counts as "on the schedule" for a given day: still waiting for a decision,
+     * holding the slot, or already used. Rejected, cancelled, expired and
+     * refunding requests are off the calendar, so dashboards leave them out.
+     * Built from {@link #OCCUPIED} so a new slot-holding state shows up here
+     * without a second edit.
+     */
+    public static final Set<ReservationStatus> SCHEDULED;
+
+    static {
+        EnumSet<ReservationStatus> scheduled = EnumSet.copyOf(OCCUPIED);
+        scheduled.add(ReservationStatus.PENDING);
+        scheduled.add(ReservationStatus.COMPLETED);
+        SCHEDULED = Set.copyOf(scheduled);
+    }
+
     /** Blocks retiring the equipment. Same membership as {@link #QUOTA}, different question. */
     public static final Set<ReservationStatus> OPEN = QUOTA;
 
