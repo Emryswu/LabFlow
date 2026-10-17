@@ -92,15 +92,18 @@ export default function Home() {
     setPageLoading(true);
     try {
       if (target === "dashboard") {
-        const [statsData, reservationData, workorderData] = await Promise.all([
+        const [statsData, reservationData, workorderData, equipmentData] = await Promise.all([
           api<Stats>("/api/dashboard/stats", token, { signal: controller.signal }),
           api<PageData<Reservation>>("/api/reservations?size=12&sort=createdAt,desc", token, { signal: controller.signal }),
           api<PageData<WorkOrder>>("/api/work-orders?size=12&sort=createdAt,desc", token, { signal: controller.signal }),
+          // Only used to show equipment names and category icons next to reservations / work orders.
+          api<PageData<Equipment>>("/api/equipment?size=100&sort=name,asc", token, { signal: controller.signal }),
         ]);
         if (!isCurrentSessionRequest()) return;
         setStats(statsData);
         setReservations(reservationData);
         setWorkorders(workorderData);
+        setEquipment(equipmentData);
       } else if (target === "equipment") {
         const requestSequence = ++equipmentRequestSequence.current;
         const filter = appliedEquipmentFilter.current;
@@ -305,9 +308,10 @@ export default function Home() {
   return <main className="app-shell">
     <AppHeader user={user} view={activeView} onViewChange={setView} onLogout={logout} />
     <section className="workspace">
-      <WorkspaceHeader user={user} view={activeView} onRefresh={() => void load(activeView)} />
+      {/* The dashboard hero carries its own title and refresh action. */}
+      {activeView !== "dashboard" && <WorkspaceHeader user={user} view={activeView} onRefresh={() => void load(activeView)} />}
       {pageLoading && <div className="loading-bar"><span></span></div>}
-      {activeView === "dashboard" && <DashboardView user={user} stats={stats} reservations={reservations} workorders={workorders} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} />}
+      {activeView === "dashboard" && <DashboardView user={user} stats={stats} reservations={reservations} workorders={workorders} equipment={equipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
       {activeView === "equipment" && <EquipmentView equipment={equipment} filter={equipmentFilter} canManage={canManageEquipment} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onCreate={() => void openCreate("equipment")} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
       {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
       {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}

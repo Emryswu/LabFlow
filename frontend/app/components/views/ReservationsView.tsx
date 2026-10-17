@@ -1,6 +1,7 @@
 import { formatDate } from "../../lib/labels";
 import type { Equipment, PageData, Reservation, UserProfile } from "../../lib/types";
 import { Empty, StatusBadge } from "../ui";
+import { Icon } from "../icons";
 
 const scheduleStatuses = new Set(["PENDING", "APPROVED"]);
 
@@ -62,7 +63,7 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
     <ReservationSchedule reservations={scheduleReservations?.content ?? []} equipment={equipment?.content ?? []} />
     <section className="panel table-panel">
       <header><div><span>RESERVATION FLOW</span><h3>预约记录</h3></div><small>共 {reservations?.totalElements ?? 0} 条</small></header>
-      <div className="table-scroll"><table><thead><tr><th>用途与申请人</th><th>使用时段</th><th>设备 ID</th><th>状态</th><th>操作</th></tr></thead><tbody>{reservations?.content.map((item) => <tr key={item.id}><td><div className="entity"><span>◷</span><div><b>{item.purpose}</b><small>{item.requesterName} · #{item.id}</small></div></div></td><td><b>{formatDate(item.startTime)}</b><small className="block">至 {formatDate(item.endTime)}</small></td><td className="mono">EQ-{item.equipmentId}</td><td><StatusBadge value={item.status} /></td><td><div className="row-actions">{canApprove && item.status === "PENDING" && <><button onClick={() => onDecide(item.id, "APPROVED")}>批准</button><button className="danger-link" onClick={() => onDecide(item.id, "REJECTED")}>拒绝</button></>}{item.requesterId === user.id && ["PENDING", "APPROVED"].includes(item.status) && <button onClick={() => onCancel(item.id)}>取消</button>}{canApprove && item.status === "APPROVED" && <button onClick={() => onComplete(item.id)}>完成</button>}</div></td></tr>)}</tbody></table>{!reservations?.content.length && <Empty text="没有符合条件的预约" />}</div>
+      <div className="table-scroll"><table><thead><tr><th>用途与申请人</th><th>使用时段</th><th>设备 ID</th><th>状态</th><th>操作</th></tr></thead><tbody>{reservations?.content.map((item) => <tr key={item.id}><td><div className="entity"><span><Icon name="calendar" size={17} /></span><div><b>{item.purpose}</b><small>{item.requesterName} · #{item.id}</small></div></div></td><td><b>{formatDate(item.startTime)}</b><small className="block">至 {formatDate(item.endTime)}</small></td><td className="mono">EQ-{item.equipmentId}</td><td><StatusBadge value={item.status} /></td><td><div className="row-actions">{canApprove && item.status === "PENDING" && <><button onClick={() => onDecide(item.id, "APPROVED")}>批准</button><button className="danger-link" onClick={() => onDecide(item.id, "REJECTED")}>拒绝</button></>}{item.requesterId === user.id && ["PENDING", "APPROVED"].includes(item.status) && <button onClick={() => onCancel(item.id)}>取消</button>}{canApprove && item.status === "APPROVED" && <button onClick={() => onComplete(item.id)}>完成</button>}</div></td></tr>)}</tbody></table>{!reservations?.content.length && <Empty text="没有符合条件的预约" />}</div>
     </section>
   </div>;
 }
