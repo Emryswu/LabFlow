@@ -363,7 +363,10 @@ const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${Str
 function formatRange(start: string, end: string) {
   const from = new Date(start);
   const to = new Date(end);
-  return `${dayLabel(from)} ${clock(from)}–${clock(to)}`;
+  const sameDay = from.getFullYear() === to.getFullYear()
+    && from.getMonth() === to.getMonth()
+    && from.getDate() === to.getDate();
+  return `${dayLabel(from)} ${clock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${clock(to)}`;
 }
 
 function formatMoment(value: string) {

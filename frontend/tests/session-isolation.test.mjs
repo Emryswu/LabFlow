@@ -18,6 +18,7 @@ test("session changes abort requests and clear every role-scoped dataset", async
   for (const setter of [
     "setStats(null)",
     "setEquipment(null)",
+    "setDashboardEquipment(null)",
     "setReservations(null)",
     "setScheduleReservations(null)",
     "setWorkorders(null)",
