@@ -39,10 +39,7 @@ export function WorkOrdersView({ user, workorders, technicians, filter, canAssig
     </section>
     <section className="panel table-panel">
       <header>
-        <div>
-          <span>FAULT WORK ORDERS</span>
-          <h3>{canAssign ? "工单队列" : "维修工单"}</h3>
-        </div>
+        <h3>{canAssign ? "工单队列" : "维修工单"}</h3>
         <small>
           {canAssign
             ? "管理员可派给任意维修员；维修员可主动接单"

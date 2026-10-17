@@ -26,7 +26,7 @@ export function EquipmentView({ equipment, filter, canManage, onFilterChange, on
       {canManage && <button className="primary" onClick={onCreate}>＋ 新建设备</button>}
     </section>
     <section className="panel table-panel">
-      <header><div><span>EQUIPMENT DIRECTORY</span><h3>设备目录</h3></div><small>共 {equipment?.totalElements ?? 0} 台设备</small></header>
+      <header><h3>设备目录</h3><small>共 {equipment?.totalElements ?? 0} 台设备</small></header>
       <div className="equipment-card-grid">{equipment?.content.map((item) => <article className="equipment-card" key={item.id}>
         <header><span className="equipment-code">{item.code}</span><StatusBadge value={item.status} /></header>
         <div className="equipment-identity"><span title={item.category}><Icon name={categoryIcon(item.category)} size={22} /></span><div><h4>{item.name}</h4><p>{item.manufacturer || "厂商待补充"} · {item.model || "型号待补充"}</p></div></div>

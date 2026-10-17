@@ -325,3 +325,55 @@ for (const scenario of ["approval", "newer refresh", "session change"]) {
     assert.equal(container.querySelector(".trend-text b").textContent, expected);
   });
 }
+
+test("the reservation calendar asks only for the 7 days it draws", async (t) => {
+  const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
+  const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
+  const previous = Object.fromEntries(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  for (const [key, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const container = document.getElementById("root");
+  const root = createRoot(container);
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close();
+    for (const key of Object.keys(globals)) {
+      if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+      else delete globalThis[key];
+    }
+  });
+
+  let listener;
+  const scheduleRequests = [];
+  const { default: Home } = loadComponent("page.tsx", {
+    subscribeSession: (next) => { listener = next; return () => {}; },
+    clearLegacyAuthStorage() {},
+    refreshSession: async () => listener({ accessToken: "test-token", user }),
+    api: async (path) => {
+      const url = new URL(path, "http://localhost/");
+      switch (url.pathname) {
+        case "/api/dashboard/stats": return {};
+        case "/api/dashboard/trends": return null;
+        case "/api/work-orders": return page([]);
+        case "/api/equipment": return page(equipment);
+        case "/api/reservations":
+          if (url.searchParams.has("from")) scheduleRequests.push(url.searchParams);
+          return page([]);
+        default: throw new Error(`Unexpected API request: ${path}`);
+      }
+    },
+  });
+
+  await act(async () => root.render(React.createElement(Home)));
+  await waitFor(() => container.querySelector('[data-nav="reservations"]'));
+  await act(async () => container.querySelector('[data-nav="reservations"]').click());
+  await waitFor(() => scheduleRequests.length === 1);
+  const [query] = scheduleRequests;
+  const from = new Date(query.get("from"));
+  const to = new Date(query.get("to"));
+  assert.equal(from.getHours() + from.getMinutes() + from.getSeconds(), 0, "starts at local midnight");
+  assert.equal(Math.round((to - from) / 86_400_000), 7);
+  assert.equal(query.get("sort"), "startTime,asc");
+  await waitFor(() => container.textContent.includes("未来 7 天还没有预约"));
+});

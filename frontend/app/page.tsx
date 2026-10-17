@@ -18,6 +18,14 @@ const emptyEquipmentForm: EquipmentForm = { code: "", name: "", category: "", lo
 const emptyReservationForm: ReservationForm = { equipmentId: "", purpose: "", startTime: "", endTime: "" };
 const emptyWorkorderForm: WorkOrderForm = { equipmentId: "", title: "", description: "", priority: "MEDIUM" };
 
+function scheduleQuery(now = new Date()) {
+  const from = new Date(now);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(from);
+  to.setDate(to.getDate() + 7);
+  return new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), size: "100", sort: "startTime,asc" });
+}
+
 export default function Home() {
   const [accessToken, setAccessToken] = useState("");
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -143,7 +151,8 @@ export default function Home() {
         if (reservationFilter) query.set("status", reservationFilter);
         const [reservationData, scheduleData, equipmentData] = await Promise.all([
           api<PageData<Reservation>>(`/api/reservations?${query}`, token, { signal: controller.signal }),
-          api<PageData<Reservation>>("/api/reservations?size=100&sort=startTime,asc", token, { signal: controller.signal }),
+          // Only the 7 days the calendar draws, instead of the first 100 reservations ever made.
+          api<PageData<Reservation>>(`/api/reservations?${scheduleQuery()}`, token, { signal: controller.signal }),
           api<PageData<Equipment>>("/api/equipment?size=100&sort=name,asc", token, { signal: controller.signal }),
         ]);
         if (!isCurrentSessionRequest()) return;
