@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Emryswu/LabFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Emryswu/LabFlow/actions/workflows/ci.yml)
 
-面向高校实验室的设备运营系统：管台账、管预约、管报修。学生提交预约，教师审批，维修员处理故障，管理员看全局与审计。适合作为可演示的后端工程项目。
+面向高校实验室的设备运营系统：管台账、管预约、管报修。学生提交预约，教师审批，维修员处理故障，管理员看全局与审计。
 
 ## 界面预览
 
