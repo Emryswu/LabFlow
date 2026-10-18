@@ -1,6 +1,6 @@
 # LabFlow 实验室设备预约与故障工单平台
 
-[![CI](https://github.com/wuWhite688/LabFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/wuWhite688/LabFlow/actions/workflows/ci.yml)
+[![CI](https://github.com/Emryswu/LabFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Emryswu/LabFlow/actions/workflows/ci.yml)
 
 面向高校实验室的设备运营系统：管台账、管预约、管报修。学生提交预约，教师审批，维修员处理故障，管理员看全局与审计。适合作为可演示的后端工程项目。
 
@@ -358,10 +358,6 @@ npm run build
 前者带一条**控制组**（金额恰好等于待付时照常结算），用来证明那几条断言是卡在金额上、不是卡在路径上；探针回退五处修复后，红的正是这 5 条、控制组仍绿。
 
 另外还有：支付窗口占时段与超时归还（`ReservationPaymentWindowIntegrationTest`）、截止时间不泄漏（`ReservationDeadlineLeakIntegrationTest` + `LocalReservationExpirySchedulerTest`）、报修下线设备时已支付预约照样退款（`FaultReportRefundsPaidReservationIntegrationTest`）、以及计费取整／窗口夹紧／付款权限／字段长度校验四道护栏（`PaymentGuardrailsIntegrationTest`，逐条用探针回退证明过不是恒真）。
-
-## 面试时可以这样说
-
-> 这是实验室设备预约和报修系统。难点在并发预约、超时审批、多角色权限，以及接上钱之后的幂等与对账。创建时按用户再按设备加锁，数据库再加悲观写锁；待审批可以重叠，批准时才占时段，并发审批最多过一条。超时用每预约一条 Rabbit 延迟队列，非法消息直接丢弃，数据库扫描兜底。JWT 每次查库，登录按 IP 限流，默认只绑 127.0.0.1，公网不会带着体验账号启动。付款走模拟渠道。幂等要分进出两个方向：回调幂等靠幂等键加唯一索引两层，只做应用层查重挡不住并发重投；出站还要有稳定幂等键加持久化重试，否则重复点支付会造出两笔真实交易，而退款请求发失败会让预约永远卡在退款中。对账刻意比的是本地流水而不是订单应收，因为「渠道成功、本地没落库」那种情况下应收和渠道恰好一致，用应收比会永远看不见它。
 
 ## 还可以做的
 
