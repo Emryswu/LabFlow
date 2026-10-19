@@ -1,24 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { isReservableStatus, statusLabels } from "../../lib/labels";
+import { useState } from "react";
+import { isReservableStatus } from "../../lib/labels";
 import type { Equipment, EquipmentFilter, PageData } from "../../lib/types";
-import { categoryIcon, categoryTone, Icon, KNOWN_CATEGORIES } from "../icons";
+import { categoryIcon, Icon, KNOWN_CATEGORIES } from "../icons";
+import { CategoryTag, menuEntries, MoreMenu, StateBadge } from "../table";
 import { Empty, Modal } from "../ui";
-
-/** Equipment states shown as a coloured dot, matching the dashboard's status chart. */
-const STATE_TONE: Record<string, string> = { AVAILABLE: "ok", IN_USE: "info", MAINTENANCE: "warn", RETIRED: "idle" };
 
 /** Derived from isReservableStatus so the table, the detail view and the booking modal never disagree. */
 const reserveBlockedReason = (status: string) => isReservableStatus(status) ? undefined
   : status === "RETIRED" ? "设备已退役，不能预约" : "设备维护中，暂不能预约";
-
-function StateBadge({ status }: { status: string }) {
-  return <span className={`state state-${STATE_TONE[status] ?? "idle"}`}><i />{statusLabels[status] ?? status}</span>;
-}
-
-function CategoryTag({ category }: { category: string }) {
-  return <span className={`cat-tag tone-${categoryTone(category)}`}>{category}</span>;
-}
 
 export function EquipmentView({ equipment, categories, filter, canManage, canReserve, onFilterChange, onLoad, onReset, onCreate, onReserve, onReport, onRetire, onRestore }: {
   equipment: PageData<Equipment> | null;
@@ -78,11 +67,11 @@ export function EquipmentView({ equipment, categories, filter, canManage, canRes
         <thead><tr><th>设备名称</th><th>设备编号</th><th>类别</th><th>所在位置</th><th>负责人</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>{items.map((item) => {
           const blocked = reserveBlockedReason(item.status);
-          const menu = [
+          const menu = menuEntries(
             item.status !== "RETIRED" && { key: "report", label: "故障报修", onClick: () => onReport(item) },
             canManage && item.status === "AVAILABLE" && onRetire && { key: "retire", label: "退役", danger: true, onClick: () => onRetire(item) },
             canManage && item.status === "RETIRED" && onRestore && { key: "restore", label: "恢复可用", onClick: () => onRestore(item) },
-          ].filter((entry): entry is MenuEntry => Boolean(entry));
+          );
           return <tr key={item.id} data-equipment-id={item.id}>
             <td><div className="equipment-name">
               <span className="equip-thumb" title={item.category}><Icon name={categoryIcon(item.category)} size={22} /></span>
@@ -110,68 +99,6 @@ export function EquipmentView({ equipment, categories, filter, canManage, canRes
     {detail && <EquipmentDetail item={detail} canReserve={canReserve} onClose={() => setDetail(null)}
       onReserve={() => { setDetail(null); onReserve(detail); }}
       onReport={() => { setDetail(null); onReport(detail); }} />}
-  </div>;
-}
-
-type MenuEntry = { key: string; label: string; danger?: boolean; onClick: () => void };
-
-const MENU_GAP = 6;
-
-/**
- * The table sits in a sideways-scrolling container, and overflow-x: auto clips
- * vertical overflow too. The list is therefore portalled to <body> and placed
- * with fixed coordinates next to its button, so no row count can clip it.
- * It opens upwards only when the viewport has no room below.
- */
-function MoreMenu({ id, open, label, entries, onToggle }: { id: number; open: boolean; label: string; entries: MenuEntry[]; onToggle: (open: boolean) => void }) {
-  const button = useRef<HTMLButtonElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    // Fixed coordinates: re-place on scroll and resize so the list stays next to its button.
-    const place = () => {
-      const menu = list.current;
-      const anchor = button.current?.getBoundingClientRect();
-      if (!menu || !anchor) return;
-      const fitsBelow = anchor.bottom + MENU_GAP + menu.offsetHeight <= window.innerHeight;
-      menu.style.top = `${fitsBelow ? anchor.bottom + MENU_GAP : Math.max(MENU_GAP, anchor.top - MENU_GAP - menu.offsetHeight)}px`;
-      menu.style.left = `${Math.max(MENU_GAP, anchor.right - menu.offsetWidth)}px`;
-      menu.style.visibility = "visible";
-    };
-    place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = () => onToggle(false);
-    const onOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (!button.current?.contains(target) && !list.current?.contains(target)) close();
-    };
-    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
-    document.addEventListener("mousedown", onOutside);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("mousedown", onOutside);
-      document.removeEventListener("keydown", onEscape);
-    };
-  }, [open, onToggle]);
-
-  return <div className="more-menu">
-    <button ref={button} type="button" className="icon-button" data-action="more" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => onToggle(!open)}>
-      <Icon name="more" size={18} />
-    </button>
-    {open && createPortal(<div ref={list} className="more-menu-list" role="menu" aria-label={label} data-menu-for={id}>
-      {entries.map((entry) => <button key={entry.key} type="button" role="menuitem" data-menu={entry.key} className={entry.danger ? "danger" : ""}
-        onClick={() => { onToggle(false); entry.onClick(); }}>{entry.label}</button>)}
-    </div>, document.body)}
   </div>;
 }
 

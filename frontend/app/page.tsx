@@ -186,8 +186,15 @@ export default function Home() {
       } else if (target === "workorders") {
         const query = new URLSearchParams({ size: "30", sort: "createdAt,desc" });
         if (workorderFilter) query.set("status", workorderFilter);
-        const workorderData = await api<PageData<WorkOrder>>(`/api/work-orders?${query}`, token, { signal: controller.signal });
-        if (isCurrentSessionRequest()) setWorkorders(workorderData);
+        const [workorderData, equipmentData] = await Promise.all([
+          api<PageData<WorkOrder>>(`/api/work-orders?${query}`, token, { signal: controller.signal }),
+          // Name lookup for the device column; the equipment page's list is filtered, so it is not reused.
+          api<PageData<Equipment>>("/api/equipment?size=100&sort=name,asc", token, { signal: controller.signal }),
+        ]);
+        if (isCurrentSessionRequest()) {
+          setWorkorders(workorderData);
+          setDashboardEquipment(equipmentData);
+        }
       } else if (target === "audit") {
         const auditData = await api<PageData<AuditLog>>("/api/audit-logs?size=40&sort=createdAt,desc", token, { signal: controller.signal });
         if (isCurrentSessionRequest()) setAuditLogs(auditData);
@@ -390,7 +397,7 @@ export default function Home() {
       {activeView === "dashboard" && <DashboardView user={user} stats={stats} trends={trends} reservations={reservations} workorders={workorders} equipment={dashboardEquipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
       {activeView === "equipment" && <EquipmentView equipment={equipment} categories={equipmentCategories} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
       {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
-      {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
+      {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} equipment={dashboardEquipment} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
       {activeView === "audit" && <AuditView auditLogs={auditLogs} />}
     </section>
     <ActionModals modal={modal} busy={busy} equipment={equipment} equipmentForm={equipmentForm} reservationForm={reservationForm} workorderForm={workorderForm} onClose={() => setModal(null)} onEquipmentChange={setEquipmentForm} onReservationChange={setReservationForm} onWorkorderChange={setWorkorderForm} onSubmitEquipment={submitEquipment} onSubmitReservation={submitReservation} onSubmitWorkorder={submitWorkorder} />

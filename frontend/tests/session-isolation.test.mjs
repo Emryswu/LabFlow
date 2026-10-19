@@ -46,7 +46,7 @@ test("late page responses are gated by the current session generation", async ()
   assert.match(loadBlock, /generation === sessionGeneration\.current && !controller\.signal\.aborted/);
   assert.match(loadBlock, /api<Stats>\([^\n]+signal: controller\.signal/);
   assert.match(loadBlock, /if \(!isCurrentSessionRequest\(\)\) return;[\s\S]*?setStats\(statsData\)/);
-  assert.match(loadBlock, /if \(isCurrentSessionRequest\(\)\) setWorkorders\(workorderData\)/);
+  assert.match(loadBlock, /if \(isCurrentSessionRequest\(\)\) \{?\s*setWorkorders\(workorderData\)/);
   assert.match(loadBlock, /if \(isCurrentSessionRequest\(\)\) setAuditLogs\(auditData\)/);
 });
 

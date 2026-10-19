@@ -296,6 +296,22 @@ label { display: grid; gap: 7px; color: #4d4641; font-size: 13px; font-weight: 6
 .more-menu-list button:hover { background: #f4f5f7; }
 .more-menu-list button.danger { color: var(--danger); }
 .more-menu-list button.danger:hover { background: #fff3f2; }
+/* Reservation and work-order tables share the equipment table's look (see components/table.tsx). */
+.list-table td { padding: 12px 15px; }
+.list-table tbody tr:hover { background: #fafbfc; }
+.list-table .equipment-name { min-width: 200px; }
+.list-table td.nowrap, .equipment-table td.nowrap { white-space: nowrap; }
+.list-table td.muted { color: #9aa0a8; }
+.fault-cell { min-width: 220px; max-width: 360px; }
+.fault-cell b { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; font-weight: 700; }
+.fault-cell small { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.list-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.list-actions .solid-button, .list-actions .ghost-button { height: 32px; padding: 0 14px; }
+.list-actions .text-link { height: 32px; padding: 0 6px; border: 0; color: #6b7079; background: transparent; font-size: 12px; font-weight: 600; }
+.list-actions .text-link:hover { color: #b4332a; text-decoration: underline; }
+.list-actions .solid-button:disabled { color: #9aa0a8; background: #eceef1; box-shadow: none; cursor: not-allowed; }
+.list-actions .assign-control select { height: 32px; }
+.state-danger { color: #b4332a; background: #fdeeed; }
 .table-note { margin: 0; padding: 12px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .equipment-detail { display: grid; gap: 16px; padding: 22px 24px; }
 .equipment-detail-head { display: flex; align-items: center; gap: 10px; }
@@ -311,13 +327,6 @@ table { width: 100%; border-collapse: collapse; }
 th { height: 42px; padding: 0 15px; border-bottom: 1px solid var(--line); color: #5b6068; background: #f7f8fa; text-align: left; font-size: 12px; font-weight: 650; letter-spacing: .3px; white-space: nowrap; }
 td { min-height: 62px; padding: 13px 15px; border-bottom: 1px solid #e8e5e1; color: #443f3a; font-size: 13px; vertical-align: middle; }
 tbody tr:hover { background: #faf8f5; }
-.entity { display: flex; align-items: center; gap: 10px; min-width: 190px; }
-.entity > span { display: grid; flex: 0 0 auto; place-items: center; width: 33px; height: 33px; border-radius: 8px; color: var(--accent-text); background: var(--soft-accent); font-size: 14px; }
-.entity > span.warn { color: #c4412f; background: #fdeeed; }
-.entity div { min-width: 0; }
-.entity b, .entity small { display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entity b { color: var(--ink); font-size: 13px; }
-.entity small { margin-top: 4px; color: #736c66; font-size: 11px; }
 .mono { font-family: Consolas, "SF Mono", Menlo, monospace; font-size: 12px; }
 .block { display: block; margin-top: 3px; color: #7d766f; }
 .status { display: inline-flex; min-height: 26px; padding: 0 10px; border: 1px solid transparent; border-radius: 999px; align-items: center; font-size: 11px; font-weight: 700; white-space: nowrap; }
