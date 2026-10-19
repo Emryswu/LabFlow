@@ -169,7 +169,7 @@ test("a work-order row menu is portalled outside the scrolling table, even for o
 });
 
 test("work-order device names survive a filtered equipment page", async (t) => {
-  const { container } = mountDom(t);
+  const { container, root } = mountDom(t);
   let listener;
   const { default: Home } = loadComponent("page.tsx", {
     subscribeSession: (next) => { listener = next; return () => {}; },
@@ -192,7 +192,7 @@ test("work-order device names survive a filtered equipment page", async (t) => {
       }
     },
   });
-  await act(async () => createRoot(container).render(React.createElement(Home)));
+  await act(async () => root.render(React.createElement(Home)));
   await waitFor(() => container.querySelector('[data-nav="equipment"]'));
   await act(async () => container.querySelector('[data-nav="equipment"]').click());
   await waitFor(() => container.querySelectorAll(".equipment-table tbody tr").length === 2);
@@ -204,3 +204,43 @@ test("work-order device names survive a filtered equipment page", async (t) => {
   await act(async () => container.querySelector('[data-nav="workorders"]').click());
   await waitFor(() => container.querySelector('[data-workorder-id="1"]')?.textContent.includes("扫描电镜"));
 });
+
+// The lookup only decorates rows; its failure must not hide rows that did load.
+for (const [view, rowSelector, rows] of [
+  ["workorders", "[data-workorder-id]", 1],
+  ["reservations", "[data-reservation-id]", 1],
+  ["dashboard", ".row-item", 2],
+]) {
+  test(`${view}: a failed equipment lookup still shows the rows, with id fallbacks and a notice`, async (t) => {
+    const { container, root } = mountDom(t);
+    let listener;
+    const reservation = {
+      id: 5, equipmentId: 1, requesterId: 1, requesterName: "林知夏", purpose: "实验", status: "PENDING",
+      startTime: "2026-10-20T10:00:00+08:00", endTime: "2026-10-20T11:00:00+08:00", createdAt: "2026-10-19T09:00:00+08:00", expiresAt: "2026-10-20T00:00:00+08:00", conflictsWith: [],
+    };
+    const { default: Home } = loadComponent("page.tsx", {
+      subscribeSession: (next) => { listener = next; return () => {}; },
+      clearLegacyAuthStorage() {},
+      refreshSession: async () => listener({ accessToken: "t", user: { id: 9, username: "admin", displayName: "管理员", role: "ADMIN" } }),
+      api: async (path) => {
+        const url = new URL(path, "http://localhost/");
+        switch (url.pathname) {
+          case "/api/dashboard/stats": return {};
+          case "/api/dashboard/trends": return null;
+          case "/api/users/technicians": return technicians;
+          case "/api/reservations": return page(url.searchParams.has("from") ? [] : [reservation]);
+          case "/api/work-orders": return page([order(1, "SUBMITTED")]);
+          case "/api/equipment": throw new Error("名录接口 500");
+          default: throw new Error(`Unexpected API request: ${path}`);
+        }
+      },
+    });
+    await act(async () => root.render(React.createElement(Home)));
+    await waitFor(() => container.querySelector('[data-nav="dashboard"]'));
+    if (view !== "dashboard") await act(async () => container.querySelector(`[data-nav="${view}"]`).click());
+    await waitFor(() => container.querySelectorAll(rowSelector).length === rows && container.querySelector(".toast.error"));
+    assert.ok(container.textContent.includes("设备 #1"), "rows fall back to the device id");
+    assert.ok(container.querySelector(".toast.error").textContent.includes("设备名录加载失败"));
+    assert.ok(!container.querySelector(".toast.error").textContent.includes("500"), "the notice names the lookup, not the raw error");
+  });
+}
