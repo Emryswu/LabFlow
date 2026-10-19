@@ -8,7 +8,7 @@
 
 > 以下截图全部来自真实运行的服务：由 GitHub Actions 打包后端、以默认 H2 profile 启动（与 `.\start-fullstack.ps1` 相同配置，零外部中间件），
 > 再起前端、按角色登录截取。数据是启动时写入的演示种子：8 台设备、4 条预约、3 条工单与对应审计记录。
-> 截图由「README 截图」workflow（`.github/workflows/readme-screenshots.yml`）生成，界面改动后推送 `chore/readme-screenshots-*` 分支即可重拍。
+> 截图由「README 截图」workflow（`.github/workflows/readme-screenshots.yml`）生成，界面改动后在 Actions 里对自己的分支手动运行即可重拍。
 
 **运营总览（管理员）**：四张数字卡（设备在册、待审批、开放工单、待处理差账）；有流量的指标带近 7 天柱状图和较前 7 天的环比，数据来自 `/api/dashboard/trends`，按服务器本地零点分桶。下面是设备状态环形图、可以直接通过 / 拒绝的待审批预约和开放工单。
 

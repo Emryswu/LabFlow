@@ -1,15 +1,15 @@
 # Retakes the README screenshots from a real running stack (default H2 profile + demo seed,
 # same as .\start-fullstack.ps1) and commits them back to the branch it ran on.
 #
-# How to use: push a branch named chore/readme-screenshots-<anything>, or run this workflow
-# by hand on any branch except main, then open a PR from that branch.
-# The commit it pushes uses the workflow token, so it does not re-trigger itself.
+# How to use: push your branch, then run it by hand on that branch (Actions → README 截图 →
+# Run workflow, or `gh workflow run readme-screenshots.yml --ref <branch>`), then open a PR.
+# Manual only: dates on the pages change every day, so every run produces new pixels and a new
+# commit; running on each push would add a commit after every push. The commit it pushes uses
+# the workflow token, so it does not trigger CI — push any later change yourself to re-run CI.
 name: README 截图
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["chore/readme-screenshots*"]
 
 permissions:
   contents: write
