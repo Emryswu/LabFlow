@@ -28,8 +28,10 @@ function hasBrowserLocks(): boolean {
   return typeof navigator !== "undefined" && !!navigator.locks;
 }
 
-function withAuthCookieLock<T>(operation: () => Promise<T>): Promise<T> {
+async function withAuthCookieLock<T>(operation: () => Promise<T>): Promise<T> {
   if (hasBrowserLocks()) {
+    // locks.request settles with the callback's settled value, but the DOM typing
+    // says Promise<Promise<T>>; returning it from an async function flattens that to T.
     return navigator.locks.request(AUTH_COOKIE_LOCK, operation);
   }
   return operation();
