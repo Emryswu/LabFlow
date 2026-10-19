@@ -108,8 +108,8 @@ test("a conflicting request cannot be approved from the list; reject stays avail
     reservation("2026-10-20T11:00:00", "2026-10-20T13:00:00", "PENDING", { conflictsWith: [clash] }),
     reservation("2026-10-20T14:00:00", "2026-10-20T15:00:00", "PENDING", { conflictsWith: [] }),
   ] });
-  assert.equal(html.match(/<button class="approve" disabled=""/g)?.length, 1);
-  assert.equal(html.match(/<button class="approve"/g)?.length, 2);
+  assert.equal(html.match(/<button[^>]*class="approve[^"]*"[^>]*disabled=""/g)?.length, 1);
+  assert.equal(html.match(/<button[^>]*class="approve[^"]*"/g)?.length, 2);
   assert.equal(html.match(/class="text-link">拒绝</g)?.length, 2);
   assert.ok(html.includes("与 #12 周教授 10月20日 10:00–12:00 冲突"));
   assert.ok(html.includes("扫描电镜"), "rows show the equipment name instead of a bare id");

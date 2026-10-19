@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { EquipmentCell, menuEntries, MoreMenu, StateBadge } from "../table";
 import { conflictSummary } from "../../lib/conflicts";
 import { formatDate } from "../../lib/labels";
 import { buildWeekSchedule, type ScheduleBlock } from "../../lib/schedule";
 import type { Equipment, PageData, Reservation, UserProfile } from "../../lib/types";
-import { Empty, StatusBadge } from "../ui";
+import { Empty } from "../ui";
 import { Icon } from "../icons";
 
 /** Tall hours when the day is short; a full 24-hour day shrinks so the week stays on screen. */
@@ -96,6 +97,7 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
   onCancel: (id: number) => void;
   onComplete: (id: number) => void;
 }) {
+  const [menuFor, setMenuFor] = useState<number | null>(null);
   const equipmentList = equipment?.content ?? [];
   const equipmentById = new Map(equipmentList.map((item) => [item.id, item]));
   return <div className="view-stack">
@@ -111,35 +113,42 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
     <ReservationSchedule schedule={scheduleReservations} equipment={equipmentList} now={new Date()} />
     <section className="panel table-panel">
       <header><h3>预约记录</h3><small>共 {reservations?.totalElements ?? 0} 条</small></header>
-      <div className="table-scroll"><table>
-        <thead><tr><th>用途与申请人</th><th>使用时段</th><th>设备</th><th>状态</th><th>操作</th></tr></thead>
+      {Boolean(reservations?.content.length) && <div className="table-scroll"><table className="list-table">
+        <thead><tr><th>设备</th><th>用途与申请人</th><th>使用时段</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>{reservations?.content.map((item) => {
-          const device = equipmentById.get(item.equipmentId);
           const conflict = conflictSummary(item);
-          return <tr key={item.id}>
-            <td><div className="entity"><span><Icon name="calendar" size={17} /></span><div><b>{item.purpose}</b><small>{item.requesterName} · #{item.id}</small></div></div></td>
-            <td><b>{formatDate(item.startTime)}</b><small className="block">至 {formatDate(item.endTime)}</small></td>
-            <td>{device ? <><b>{device.name}</b><small className="block mono">{device.code}</small></> : <span className="mono">#{item.equipmentId}</span>}</td>
+          const menu = menuEntries(
+            item.requesterId === user.id && ["PENDING", "APPROVED"].includes(item.status)
+              && { key: "cancel", label: "取消预约", danger: true, onClick: () => onCancel(item.id) },
+          );
+          return <tr key={item.id} data-reservation-id={item.id}>
+            <td><EquipmentCell equipment={equipmentById.get(item.equipmentId)} equipmentId={item.equipmentId} /></td>
+            <td><div className="fault-cell"><b>{item.purpose}</b><small>{item.requesterName} · #{item.id}</small></div></td>
+            <td className="nowrap"><b>{formatDate(item.startTime)}</b><small className="block">至 {formatDate(item.endTime)}</small></td>
             <td>
-              <StatusBadge value={item.status} />
+              <StateBadge status={item.status} />
               {conflict && <small className="conflict-note" title={conflict.detail}><Icon name="alert" size={13} />{conflict.text}</small>}
             </td>
-            <td><div className="row-actions">
+            <td><div className="list-actions">
               {canApprove && item.status === "PENDING" && <>
                 <button
-                  className="approve"
+                  type="button"
+                  className="approve solid-button"
                   disabled={Boolean(conflict)}
                   title={conflict?.detail}
                   onClick={() => onDecide(item.id, "APPROVED")}
                 >批准</button>
-                <button className="text-link" onClick={() => onDecide(item.id, "REJECTED")}>拒绝</button>
+                <button type="button" className="text-link" onClick={() => onDecide(item.id, "REJECTED")}>拒绝</button>
               </>}
-              {item.requesterId === user.id && ["PENDING", "APPROVED"].includes(item.status) && <button onClick={() => onCancel(item.id)}>取消</button>}
-              {canApprove && (item.status === "APPROVED" || item.status === "PAID") && <button onClick={() => onComplete(item.id)}>完成</button>}
+              {canApprove && (item.status === "APPROVED" || item.status === "PAID")
+                && <button type="button" className="solid-button" data-action="complete" onClick={() => onComplete(item.id)}>完成</button>}
+              {menu.length > 0 && <MoreMenu id={item.id} open={menuFor === item.id} label={`预约 #${item.id} 更多操作`} entries={menu}
+                onToggle={(open) => setMenuFor(open ? item.id : null)} />}
             </div></td>
           </tr>;
         })}</tbody>
-      </table>{!reservations?.content.length && <Empty text="没有符合条件的预约" />}</div>
+      </table></div>}
+      {!reservations?.content.length && <Empty text="没有符合条件的预约" />}
     </section>
   </div>;
 }

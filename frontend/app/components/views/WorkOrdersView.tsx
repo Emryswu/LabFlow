@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { formatDate } from "../../lib/labels";
-import type { PageData, Technician, UserProfile, WorkOrder } from "../../lib/types";
-import { Empty, StatusBadge } from "../ui";
+import { formatDate, statusLabels } from "../../lib/labels";
+import type { Equipment, PageData, Technician, UserProfile, WorkOrder } from "../../lib/types";
+import { Icon } from "../icons";
+import { EquipmentCell, menuEntries, MoreMenu, StateBadge } from "../table";
+import { Empty } from "../ui";
 
-export function WorkOrdersView({ user, workorders, technicians, filter, canAssign, canClaim, canProcess, onFilterChange, onLoad, onCreate, onTransition, onClaim }: {
+export function WorkOrdersView({ user, workorders, equipment, technicians, filter, canAssign, canClaim, canProcess, onFilterChange, onLoad, onCreate, onTransition, onClaim }: {
   user: UserProfile;
   workorders: PageData<WorkOrder> | null;
+  /** Full, unfiltered name lookup; never the equipment page's filtered list. */
+  equipment: PageData<Equipment> | null;
   technicians: Technician[];
   filter: string;
   canAssign: boolean;
@@ -18,10 +22,24 @@ export function WorkOrdersView({ user, workorders, technicians, filter, canAssig
   onClaim: (item: WorkOrder) => void;
 }) {
   const [selectedAssignees, setSelectedAssignees] = useState<Record<number, string>>({});
-  const technicianName = (id: number | null) => technicians.find((item) => item.id === id)?.displayName
-    || (id ? `维修员 #${id}` : "待分派");
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const equipmentById = new Map((equipment?.content ?? []).map((item) => [item.id, item]));
+  // The technician list is only loaded for admins, so a technician's own orders would otherwise read "维修员 #id".
+  const technicianName = (id: number | null) => (id === user.id ? user.displayName : undefined)
+    ?? technicians.find((item) => item.id === id)?.displayName
+    ?? (id ? `维修员 #${id}` : "待分派");
   const isOwn = (item: WorkOrder) => item.assigneeId === user.id;
   const canActOn = (item: WorkOrder) => canAssign || (canProcess && isOwn(item));
+
+  /** The one forward step for this row, shown as the solid button; everything else goes in the menu. */
+  const primaryStep = (item: WorkOrder): { key: string; label: string; onClick: () => void } | null => {
+    if (canClaim && item.status === "SUBMITTED") return { key: "claim", label: "接单", onClick: () => onClaim(item) };
+    if (!canActOn(item)) return null;
+    if (item.status === "ASSIGNED") return { key: "start", label: "开始处理", onClick: () => onTransition(item, "IN_PROGRESS") };
+    if (item.status === "IN_PROGRESS") return { key: "resolve", label: "标记解决", onClick: () => onTransition(item, "RESOLVED") };
+    if (item.status === "RESOLVED") return { key: "close", label: "关闭", onClick: () => onTransition(item, "CLOSED") };
+    return null;
+  };
 
   return <div className="view-stack">
     <section className="toolbar">
@@ -35,7 +53,7 @@ export function WorkOrdersView({ user, workorders, technicians, filter, canAssig
       </select>
       <button className="secondary" onClick={onLoad}>筛选</button>
       <div className="spacer"></div>
-      <button className="primary" onClick={onCreate}>＋ 故障报修</button>
+      <button className="primary" onClick={onCreate}><Icon name="plus" size={16} />故障报修</button>
     </section>
     <section className="panel table-panel">
       <header>
@@ -47,48 +65,40 @@ export function WorkOrdersView({ user, workorders, technicians, filter, canAssig
           · 共 {workorders?.totalElements ?? 0} 条
         </small>
       </header>
-      <div className="table-scroll"><table>
-        <thead><tr><th>故障描述</th><th>优先级</th><th>设备 ID</th><th>处理人员</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+      {Boolean(workorders?.content.length) && <div className="table-scroll"><table className="list-table">
+        <thead><tr><th>故障描述</th><th>设备</th><th>处理人员</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
         <tbody>{workorders?.content.map((item) => {
           const selected = selectedAssignees[item.id] || String(technicians[0]?.id || "");
-          return <tr key={item.id}>
-            <td><div className="entity"><span className="warn">!</span><div><b>{item.title}</b><small>{item.reporterName} · {item.description}</small></div></div></td>
-            <td><StatusBadge value={item.priority} /></td>
-            <td className="mono">EQ-{item.equipmentId}</td>
-            <td>{technicianName(item.assigneeId)}</td>
-            <td><StatusBadge value={item.status} /></td>
-            <td>{formatDate(item.updatedAt)}</td>
-            <td><div className="row-actions">
-              {canAssign && item.status === "SUBMITTED" && (
-                <div className="assign-control">
-                  <select aria-label={`为工单 ${item.id} 选择维修员`} value={selected} onChange={(e) => setSelectedAssignees({ ...selectedAssignees, [item.id]: e.target.value })}>
-                    {technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.displayName}</option>)}
-                  </select>
-                  <button disabled={!selected} onClick={() => onTransition(item, "ASSIGNED", Number(selected))}>派单</button>
-                </div>
-              )}
-              {canClaim && item.status === "SUBMITTED" && (
-                <button className="primary" onClick={() => onClaim(item)}>接单</button>
-              )}
-              {canAssign && (item.status === "SUBMITTED" || item.status === "ASSIGNED") && (
-                <button className="danger-link" onClick={() => onTransition(item, "CANCELLED")}>取消</button>
-              )}
-              {canActOn(item) && item.status === "ASSIGNED" && (
-                <button onClick={() => onTransition(item, "IN_PROGRESS")}>开始处理</button>
-              )}
-              {canActOn(item) && item.status === "IN_PROGRESS" && (
-                <button onClick={() => onTransition(item, "RESOLVED")}>标记解决</button>
-              )}
-              {canActOn(item) && item.status === "RESOLVED" && (
-                <>
-                  <button onClick={() => onTransition(item, "CLOSED")}>关闭</button>
-                  <button onClick={() => onTransition(item, "IN_PROGRESS")}>重新打开</button>
-                </>
-              )}
+          const primary = primaryStep(item);
+          const menu = menuEntries(
+            canActOn(item) && item.status === "RESOLVED" && { key: "reopen", label: "重新打开", onClick: () => onTransition(item, "IN_PROGRESS") },
+            canAssign && (item.status === "SUBMITTED" || item.status === "ASSIGNED")
+              && { key: "cancel", label: "取消工单", danger: true, onClick: () => onTransition(item, "CANCELLED") },
+          );
+          return <tr key={item.id} data-workorder-id={item.id}>
+            <td><div className="fault-cell">
+              <b>{item.title}<span className={`tag tag-${item.priority.toLowerCase()}`}>{statusLabels[item.priority] ?? item.priority}</span></b>
+              <small>{item.reporterName} · {item.description}</small>
+            </div></td>
+            <td><EquipmentCell equipment={equipmentById.get(item.equipmentId)} equipmentId={item.equipmentId} /></td>
+            <td className={item.assigneeId ? "" : "muted"}>{technicianName(item.assigneeId)}</td>
+            <td><StateBadge status={item.status} /></td>
+            <td className="nowrap">{formatDate(item.updatedAt)}</td>
+            <td><div className="list-actions">
+              {canAssign && item.status === "SUBMITTED" && <div className="assign-control">
+                <select aria-label={`为工单 ${item.id} 选择维修员`} value={selected} onChange={(e) => setSelectedAssignees({ ...selectedAssignees, [item.id]: e.target.value })}>
+                  {technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.displayName}</option>)}
+                </select>
+                <button type="button" className="solid-button" data-action="assign" disabled={!selected} onClick={() => onTransition(item, "ASSIGNED", Number(selected))}>派单</button>
+              </div>}
+              {primary && <button type="button" className="solid-button" data-action={primary.key} onClick={primary.onClick}>{primary.label}</button>}
+              {menu.length > 0 && <MoreMenu id={item.id} open={menuFor === item.id} label={`工单 ${item.title} 更多操作`} entries={menu}
+                onToggle={(open) => setMenuFor(open ? item.id : null)} />}
             </div></td>
           </tr>;
         })}</tbody>
-      </table>{!workorders?.content.length && <Empty text={canAssign ? "没有符合条件的故障工单" : "暂无可接或分配给你的工单"} />}</div>
+      </table></div>}
+      {!workorders?.content.length && <Empty text={canAssign ? "没有符合条件的故障工单" : "暂无可接或分配给你的工单"} />}
     </section>
   </div>;
 }

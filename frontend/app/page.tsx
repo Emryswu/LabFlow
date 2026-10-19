@@ -29,6 +29,22 @@ function scheduleQuery(now = new Date()) {
   return query;
 }
 
+const EQUIPMENT_LOOKUP = "/api/equipment?size=100&sort=name,asc";
+const LOOKUP_FAILED = "设备名录加载失败，设备列暂时只显示编号";
+
+/**
+ * Device names and icons only decorate a page's own rows, so the lookup settles on its own:
+ * a failed lookup must never hide rows that did load. Rows fall back to "设备 #id" and the
+ * page says why, instead of staying empty or stale.
+ */
+async function settle<T>(request: Promise<T>): Promise<{ ok: true; data: T } | { ok: false }> {
+  try {
+    return { ok: true, data: await request };
+  } catch {
+    return { ok: false };
+  }
+}
+
 // The calendar filters locally, so publish the week only after every page succeeds.
 async function loadSchedule(token: string, signal: AbortSignal): Promise<Reservation[]> {
   const query = scheduleQuery();
@@ -139,22 +155,32 @@ export default function Home() {
     activeSessionRequests.current.add(controller);
     const isCurrentSessionRequest = () =>
       generation === sessionGeneration.current && !controller.signal.aborted;
+    // Publishes a separately settled lookup after the page's own rows are already on screen.
+    const applyLookup = async (
+      lookup: Promise<{ ok: true; data: PageData<Equipment> } | { ok: false }>,
+      apply: (data: PageData<Equipment>) => void,
+    ) => {
+      const result = await lookup;
+      if (!isCurrentSessionRequest()) return;
+      if (result.ok) apply(result.data);
+      else notify(LOOKUP_FAILED, true);
+    };
     setPageLoading(true);
     try {
       if (target === "dashboard") {
         void loadTrends(token);
-        const [statsData, reservationData, workorderData, equipmentData] = await Promise.all([
+        // Only used to show equipment names and category icons next to reservations / work orders.
+        const lookup = settle(api<PageData<Equipment>>(EQUIPMENT_LOOKUP, token, { signal: controller.signal }));
+        const [statsData, reservationData, workorderData] = await Promise.all([
           api<Stats>("/api/dashboard/stats", token, { signal: controller.signal }),
           api<PageData<Reservation>>("/api/reservations?size=12&sort=createdAt,desc", token, { signal: controller.signal }),
           api<PageData<WorkOrder>>("/api/work-orders?size=12&sort=createdAt,desc", token, { signal: controller.signal }),
-          // Only used to show equipment names and category icons next to reservations / work orders.
-          api<PageData<Equipment>>("/api/equipment?size=100&sort=name,asc", token, { signal: controller.signal }),
         ]);
         if (!isCurrentSessionRequest()) return;
         setStats(statsData);
         setReservations(reservationData);
         setWorkorders(workorderData);
-        setDashboardEquipment(equipmentData);
+        await applyLookup(lookup, setDashboardEquipment);
       } else if (target === "equipment") {
         const requestSequence = ++equipmentRequestSequence.current;
         const filter = appliedEquipmentFilter.current;
@@ -174,20 +200,23 @@ export default function Home() {
       } else if (target === "reservations") {
         const query = new URLSearchParams({ size: "30", sort: "createdAt,desc" });
         if (reservationFilter) query.set("status", reservationFilter);
-        const [reservationData, scheduleData, equipmentData] = await Promise.all([
+        const lookup = settle(api<PageData<Equipment>>(EQUIPMENT_LOOKUP, token, { signal: controller.signal }));
+        const [reservationData, scheduleData] = await Promise.all([
           api<PageData<Reservation>>(`/api/reservations?${query}`, token, { signal: controller.signal }),
           loadSchedule(token, controller.signal),
-          api<PageData<Equipment>>("/api/equipment?size=100&sort=name,asc", token, { signal: controller.signal }),
         ]);
         if (!isCurrentSessionRequest()) return;
         setReservations(reservationData);
         setScheduleReservations(scheduleData);
-        setEquipment(equipmentData);
+        await applyLookup(lookup, setEquipment);
       } else if (target === "workorders") {
         const query = new URLSearchParams({ size: "30", sort: "createdAt,desc" });
         if (workorderFilter) query.set("status", workorderFilter);
+        // Name lookup for the device column; the equipment page's list is filtered, so it is not reused.
+        const lookup = settle(api<PageData<Equipment>>(EQUIPMENT_LOOKUP, token, { signal: controller.signal }));
         const workorderData = await api<PageData<WorkOrder>>(`/api/work-orders?${query}`, token, { signal: controller.signal });
         if (isCurrentSessionRequest()) setWorkorders(workorderData);
+        await applyLookup(lookup, setDashboardEquipment);
       } else if (target === "audit") {
         const auditData = await api<PageData<AuditLog>>("/api/audit-logs?size=40&sort=createdAt,desc", token, { signal: controller.signal });
         if (isCurrentSessionRequest()) setAuditLogs(auditData);
@@ -390,7 +419,7 @@ export default function Home() {
       {activeView === "dashboard" && <DashboardView user={user} stats={stats} trends={trends} reservations={reservations} workorders={workorders} equipment={dashboardEquipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
       {activeView === "equipment" && <EquipmentView equipment={equipment} categories={equipmentCategories} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
       {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
-      {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
+      {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} equipment={dashboardEquipment} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
       {activeView === "audit" && <AuditView auditLogs={auditLogs} />}
     </section>
     <ActionModals modal={modal} busy={busy} equipment={equipment} equipmentForm={equipmentForm} reservationForm={reservationForm} workorderForm={workorderForm} onClose={() => setModal(null)} onEquipmentChange={setEquipmentForm} onReservationChange={setReservationForm} onWorkorderChange={setWorkorderForm} onSubmitEquipment={submitEquipment} onSubmitReservation={submitReservation} onSubmitWorkorder={submitWorkorder} />
