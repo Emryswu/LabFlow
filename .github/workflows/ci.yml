@@ -231,6 +231,10 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: 类型检查
+        working-directory: frontend
+        run: npm run typecheck
+
       # npm test 会先 vinext build 再跑单测，覆盖生产构建与 SSR 壳层。
       - name: 测试（含生产构建）
         working-directory: frontend
