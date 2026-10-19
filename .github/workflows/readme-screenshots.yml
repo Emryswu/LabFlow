@@ -1,0 +1,95 @@
+# Retakes the README screenshots from a real running stack (default H2 profile + demo seed,
+# same as .\start-fullstack.ps1) and commits them back to the branch it ran on.
+#
+# How to use: push a branch named chore/readme-screenshots-<anything>, or run this workflow
+# by hand on any branch except main, then open a PR from that branch.
+# The commit it pushes uses the workflow token, so it does not re-trigger itself.
+name: README 截图
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["chore/readme-screenshots*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: readme-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    name: 起栈并截图
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - name: 不在 main 上直接提交
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "::error::请在分支上运行（例如 chore/readme-screenshots-xxx），截图会提交回该分支，再走 PR 合入。"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: 准备 Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: 准备 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 中文字体
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+
+      - name: 打包后端
+        run: ./mvnw -B --no-transfer-progress -DskipTests package
+
+      - name: 构建前端
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx vinext build
+
+      - name: 安装截图工具
+        working-directory: .github/screenshots
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      # One step: background processes started in an earlier step are not guaranteed to survive.
+      - name: 起栈并截图
+        env:
+          BACKEND_BASE_URL: http://127.0.0.1:18080
+        run: |
+          set +e
+          setsid nohup java -jar target/*.jar --server.port=18080 > backend.log 2>&1 < /dev/null &
+          for i in $(seq 1 90); do curl -fs -o /dev/null http://127.0.0.1:18080/actuator/health && break; sleep 2; done
+          (cd frontend && setsid nohup npx vinext start --port 13000 > ../frontend.log 2>&1 < /dev/null &)
+          for i in $(seq 1 60); do curl -fs -o /dev/null http://127.0.0.1:13000/ && break; sleep 2; done
+          node .github/screenshots/take.mjs "$GITHUB_WORKSPACE/docs/screenshots" http://127.0.0.1:13000/ 2>&1 | tee shots.log
+          code=${PIPESTATUS[0]}
+          # Job logs are not always readable from where this is reviewed, so surface the result as annotations.
+          grep -E "error|saved" shots.log | sed 's/^/::notice::/'
+          exit $code
+
+      - name: 失败时打印日志
+        if: failure()
+        run: |
+          tail -n 15 backend.log | sed 's/^/::warning::backend /' || true
+          tail -n 15 frontend.log | sed 's/^/::warning::frontend /' || true
+
+      - name: 提交截图
+        run: |
+          git config user.name "Emrys"
+          git config user.email "219520811+Emryswu@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet && { echo "::notice::截图没有变化"; exit 0; }
+          git commit -m "docs(readme): 重拍界面截图（Actions 实拍）"
+          git push
