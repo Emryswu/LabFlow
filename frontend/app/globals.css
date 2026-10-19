@@ -74,9 +74,10 @@ label { display: grid; gap: 7px; color: #4d4641; font-size: 13px; font-weight: 6
 .icon-field .icon { position: absolute; top: 50%; left: 18px; color: #5a5f67; transform: translateY(-50%); pointer-events: none; }
 .icon-field input { height: 56px; padding-left: 52px; border-radius: 10px; background: #f7f8f9; font-size: 15px; }
 .icon-field input:focus { background: white; }
-.login-submit { width: 100%; height: 56px; margin-top: 8px; border-radius: 10px; font-size: 17px; letter-spacing: 4px; }
-.login-submit:hover { background: var(--accent-dark); }
-.login-submit:disabled { opacity: .7; cursor: wait; }
+/* Scoped to the card so the shared .solid-button size further down cannot win on source order. */
+.login-card .login-submit { width: 100%; height: 56px; margin-top: 8px; border-radius: 10px; font-size: 17px; letter-spacing: 4px; }
+.login-card .login-submit:hover { background: var(--accent-dark); }
+.login-card .login-submit:disabled { color: white; background: var(--orange); opacity: .7; cursor: wait; }
 .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 17px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 700; letter-spacing: .1px; }
 .primary { border: 1px solid var(--accent); color: white; background: var(--accent); box-shadow: 0 4px 12px rgba(232, 98, 26, .22); }
 .primary:hover { border-color: var(--accent-dark); background: var(--accent-dark); }

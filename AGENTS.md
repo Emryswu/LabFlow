@@ -64,6 +64,7 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 - 角色导航以 `app/lib/roles.ts` 的 `navItemsForRole` 为准；`tests/rendered-html.test.mjs` 里有一份对照，改导航时两处一起改。
 - 筛选项（下拉选项、标签列表）不要从当前页、已筛选的列表数据里推导：换页或加筛选后选项会消失。由后端单独接口提供，例如设备类别用 `GET /api/equipment/categories`。测试要覆盖「筛选后」和「数据在第一页之外」两种情况。
 - 设备名录这类只用来装饰行的数据，不要和页面自己的数据放进同一个 `Promise.all`：名录失败会连带已经成功的行一起丢掉。用 `page.tsx` 的 `settle` 单独等待，失败时行回退到编号并单独提示；测试要覆盖「主数据成功、名录失败」。
+- 给 `.solid-button`、`.ghost-button` 这类通用类加页面专属尺寸时，选择器要带上父级（如 `.login-card .login-submit`）：单个类名写在通用样式前面会按源码顺序被覆盖。jsdom 的 `getComputedStyle` 不算优先级，测不出这种覆盖，要断言样式时用 `tests/css-cascade.mjs` 的 `cascadedValue`。
 - 菜单、下拉层等浮层不要渲染在 `overflow` 滚动容器里（表格外层的 `.table-scroll` 会裁掉纵向溢出），用 portal 挂到 `body` 再按触发按钮定位，参照 `EquipmentView` 的 `MoreMenu`。测试至少覆盖一行、两行和末行三种情况。
 
 ## 编辑方式

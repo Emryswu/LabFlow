@@ -262,3 +262,40 @@ test("a demo card fills the login form with that seeded account", async (t) => {
   assert.equal(container.querySelector('[data-demo="TECHNICIAN"]').getAttribute("aria-pressed"), "true");
   assert.equal(container.querySelector('[data-demo="STUDENT"]').getAttribute("aria-pressed"), "false");
 });
+
+test("page-specific button sizes are not overridden by the shared .solid-button style", async () => {
+  const { cascadedValue, loadStyles } = await import("./css-cascade.mjs");
+  const rules = loadStyles();
+  const { LoginView } = loadComponent("components/LoginView.tsx");
+  const { AuditView, emptyAuditFilter } = loadComponent("components/views/AuditView.tsx");
+  const login = (busy) => renderToStaticMarkup(React.createElement(LoginView, {
+    login: { username: "", password: "" }, busy, toast: null, onLoginChange: noop, onSubmit: noop, onDemo: noop,
+  }));
+  const audit = renderToStaticMarkup(React.createElement(AuditView, {
+    auditLogs: page([log(1, "ADMIN", "EQUIPMENT_CREATED")]), filter: emptyAuditFilter, onFilterChange: noop, onSearch: noop, onReset: noop, onPage: noop,
+  }));
+  const { document } = new JSDOM(`${login(false)}<div id="busy">${login(true)}</div>${audit}`).window;
+  const style = (element, property) => cascadedValue(element, property, { rules });
+
+  const submit = document.querySelector(".login-submit");
+  assert.equal(style(submit, "height"), "56px");
+  assert.equal(style(submit, "font-size"), "17px");
+  assert.equal(style(submit, "border-radius"), "10px");
+  const busySubmit = document.querySelector("#busy .login-submit");
+  assert.equal(busySubmit.disabled, true);
+  assert.equal(style(busySubmit, "cursor"), "wait", "busy login keeps its own disabled look");
+
+  for (const button of document.querySelectorAll(".audit-filters button")) {
+    assert.equal(style(button, "height"), "40px", button.textContent);
+  }
+  // The shared size still applies where nothing more specific is set.
+  assert.equal(style(document.querySelector('[data-action="next-page"]'), "height"), "32px");
+});
+
+test("the cascade helper ranks specificity above source order", async () => {
+  const { cascadedValue } = await import("./css-cascade.mjs");
+  const { document } = new JSDOM(`<style>.a .b{height:56px} .b{height:32px} .c{height:1px !important} #d.c{height:2px}</style><div class="a"><i class="b"></i><i id="d" class="c"></i></div>`).window;
+  const rules = document.styleSheets[0].cssRules;
+  assert.equal(cascadedValue(document.querySelector(".b"), "height", { rules }), "56px");
+  assert.equal(cascadedValue(document.querySelector(".c"), "height", { rules }), "1px");
+});
