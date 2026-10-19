@@ -12,11 +12,12 @@ import { ReservationsView } from "./components/views/ReservationsView";
 import { WorkOrdersView } from "./components/views/WorkOrdersView";
 import { api, clearAuthSession, clearLegacyAuthStorage, loginRequest, logoutRequest, refreshSession, setAuthSession, subscribeSession } from "./lib/api";
 import { isViewAllowed } from "./lib/roles";
-import type { AuditLog, Equipment, EquipmentForm, ModalKind, PageData, Reservation, ReservationForm, Stats, Technician, ToastState, Trends, UserProfile, View, WorkOrder, WorkOrderForm } from "./lib/types";
+import type { AuditLog, Equipment, EquipmentFilter, EquipmentForm, ModalKind, PageData, Reservation, ReservationForm, Stats, Technician, ToastState, Trends, UserProfile, View, WorkOrder, WorkOrderForm } from "./lib/types";
 
 const emptyEquipmentForm: EquipmentForm = { code: "", name: "", category: "", location: "", manufacturer: "", model: "", responsiblePerson: "", purchaseDate: "", description: "" };
 const emptyReservationForm: ReservationForm = { equipmentId: "", purpose: "", startTime: "", endTime: "" };
 const emptyWorkorderForm: WorkOrderForm = { equipmentId: "", title: "", description: "", priority: "MEDIUM" };
+const emptyEquipmentFilter: EquipmentFilter = { keyword: "", status: "", category: "" };
 
 function scheduleQuery(now = new Date()) {
   const from = new Date(now);
@@ -59,7 +60,7 @@ export default function Home() {
   const [auditLogs, setAuditLogs] = useState<PageData<AuditLog> | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [modal, setModal] = useState<ModalKind | null>(null);
-  const [equipmentFilter, setEquipmentFilter] = useState({ keyword: "", status: "" });
+  const [equipmentFilter, setEquipmentFilter] = useState<EquipmentFilter>(emptyEquipmentFilter);
   const [reservationFilter, setReservationFilter] = useState("");
   const [workorderFilter, setWorkorderFilter] = useState("");
   const appliedEquipmentFilter = useRef(equipmentFilter);
@@ -89,7 +90,7 @@ export default function Home() {
     for (const controller of activeSessionRequests.current) controller.abort();
     activeSessionRequests.current.clear();
     equipmentRequestSequence.current += 1;
-    appliedEquipmentFilter.current = { keyword: "", status: "" };
+    appliedEquipmentFilter.current = emptyEquipmentFilter;
     setStats(null);
     setTrends(null);
     setEquipment(null);
@@ -102,7 +103,7 @@ export default function Home() {
     setModal(null);
     setBusy(false);
     setPageLoading(false);
-    setEquipmentFilter({ keyword: "", status: "" });
+    setEquipmentFilter(emptyEquipmentFilter);
     setReservationFilter("");
     setWorkorderFilter("");
     setEquipmentForm(emptyEquipmentForm);
@@ -157,6 +158,7 @@ export default function Home() {
         const query = new URLSearchParams({ size: "30", sort: "createdAt,desc" });
         if (filter.keyword) query.set("keyword", filter.keyword);
         if (filter.status) query.set("status", filter.status);
+        if (filter.category) query.set("category", filter.category);
         const equipmentData = await api<PageData<Equipment>>(`/api/equipment?${query}`, token, { signal: controller.signal });
         if (isCurrentSessionRequest() && requestSequence === equipmentRequestSequence.current) {
           setEquipment(equipmentData);
@@ -231,6 +233,8 @@ export default function Home() {
   }, [user, accessToken, activeView, load]);
 
   const canManageEquipment = user?.role === "ADMIN" || user?.role === "TEACHER";
+  // Mirrors SecurityConfig: POST /api/reservations is open to students, teachers and admins.
+  const canReserve = user?.role === "STUDENT" || user?.role === "TEACHER" || user?.role === "ADMIN";
   const canApprove = user?.role === "ADMIN" || user?.role === "TEACHER";
   const canAssignWorkOrders = user?.role === "ADMIN";
   const canClaimWorkOrders = user?.role === "TECHNICIAN";
@@ -350,6 +354,23 @@ export default function Home() {
     void load("equipment");
   }
 
+  function resetEquipmentFilter() {
+    setEquipmentFilter(emptyEquipmentFilter);
+    appliedEquipmentFilter.current = emptyEquipmentFilter;
+    void load("equipment");
+  }
+
+  // Row actions open the usual modals with the device already chosen.
+  function reserveEquipment(item: Equipment) {
+    setReservationForm({ ...emptyReservationForm, equipmentId: String(item.id) });
+    void openCreate("reservation");
+  }
+
+  function reportEquipment(item: Equipment) {
+    setWorkorderForm({ ...emptyWorkorderForm, equipmentId: String(item.id) });
+    void openCreate("workorder");
+  }
+
   if (!user) return <LoginView login={login} busy={busy} toast={toast} onLoginChange={setLogin} onSubmit={submitLogin} onDemo={(username, password) => setLogin({ username, password })} />;
 
   return <main className="app-shell">
@@ -359,7 +380,7 @@ export default function Home() {
       {activeView !== "dashboard" && <WorkspaceHeader user={user} view={activeView} onRefresh={() => void load(activeView)} />}
       {pageLoading && <div className="loading-bar"><span></span></div>}
       {activeView === "dashboard" && <DashboardView user={user} stats={stats} trends={trends} reservations={reservations} workorders={workorders} equipment={dashboardEquipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
-      {activeView === "equipment" && <EquipmentView equipment={equipment} filter={equipmentFilter} canManage={canManageEquipment} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onCreate={() => void openCreate("equipment")} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
+      {activeView === "equipment" && <EquipmentView equipment={equipment} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
       {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
       {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
       {activeView === "audit" && <AuditView auditLogs={auditLogs} />}

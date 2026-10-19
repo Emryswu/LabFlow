@@ -12,6 +12,7 @@ const paths = {
   clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
   bolt: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />,
   chevron: <path d="m9.5 6 6 6-6 6" />,
+  more: <><circle cx="12" cy="5.5" r=".9" /><circle cx="12" cy="12" r=".9" /><circle cx="12" cy="18.5" r=".9" /></>,
   arrowUp: <path d="M12 19V5M6 11l6-6 6 6" />,
   arrowDown: <path d="M12 5v14M6 13l6 6 6-6" />,
   pie: <><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z" /><path d="M15 3.9A8.5 8.5 0 0 1 20.1 9H15z" /></>,
@@ -51,15 +52,29 @@ export function Icon({ name, size = 20, className }: { name: IconName; size?: nu
   >{paths[name]}</svg>;
 }
 
-/** Equipment photos are not stored, so each category gets a recognisable line icon instead. */
+export type CategoryTone = "orange" | "amber" | "coral" | "green" | "blue" | "violet" | "graphite";
+
+/**
+ * One table drives a category's icon, its tag colour and the category filter's
+ * options, so adding a category here updates all three at once.
+ * Equipment photos are not stored, so each category gets a recognisable line icon instead.
+ */
+const CATEGORY_STYLES: Record<string, { icon: IconName; tone: CategoryTone }> = {
+  显微成像: { icon: "microscope", tone: "blue" },
+  分析检测: { icon: "flask", tone: "orange" },
+  结构分析: { icon: "gem", tone: "violet" },
+  生命科学: { icon: "dna", tone: "green" },
+  光谱分析: { icon: "waves", tone: "amber" },
+  样品制备: { icon: "centrifuge", tone: "coral" },
+};
+
+/** Categories with their own icon and colour; free-text categories fall back to a neutral style. */
+export const KNOWN_CATEGORIES = Object.keys(CATEGORY_STYLES);
+
 export function categoryIcon(category: string | null | undefined): IconName {
-  switch (category) {
-    case "显微成像": return "microscope";
-    case "分析检测": return "flask";
-    case "结构分析": return "gem";
-    case "生命科学": return "dna";
-    case "光谱分析": return "waves";
-    case "样品制备": return "centrifuge";
-    default: return "box";
-  }
+  return (category && CATEGORY_STYLES[category]?.icon) || "box";
+}
+
+export function categoryTone(category: string | null | undefined): CategoryTone {
+  return (category && CATEGORY_STYLES[category]?.tone) || "graphite";
 }
