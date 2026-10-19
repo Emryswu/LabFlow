@@ -51,6 +51,8 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 - commit 和 PR 只署作者本人。不加 `Co-Authored-By`、会话链接（`claude.ai/code/session…`）、`Generated with ...` 之类的署名行。CI 的「提交信息署名检查」会拦下带这些字样的提交。
 - PR 描述用中文。
 - 改完必须先在本地跑通所改部分的 lint 和测试（见上方命令），全部通过再提交。
+- PR 描述里的截图放在单独的孤儿分支 `pr-assets/<PR 主题>`（只含图片），用 `raw.githubusercontent.com/.../pr-assets/<主题>/...` 引用，不提交进功能分支。
+- **不要删除任何 `pr-assets/*` 分支**，PR 合并后也不删：已合并 PR 的描述仍引用这些图，删了截图就永久挂掉。清理分支时只删功能分支（`feat/*`、`fix/*`、`chore/*`、`docs/*`、`tmp/*` 等）。
 
 ## 修 bug 与 review
 
