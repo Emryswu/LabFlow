@@ -1,5 +1,7 @@
 package com.arthur.labops.equipment;
 
+import java.util.List;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -46,6 +48,11 @@ public class EquipmentController {
     @PatchMapping("/{id}/restore")
     EquipmentResponse restore(@PathVariable Long id) {
         return equipmentService.restore(id);
+    }
+
+    @GetMapping("/categories")
+    List<String> categories() {
+        return equipmentService.findCategories();
     }
 
     @GetMapping

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { isReservableStatus, statusLabels } from "../../lib/labels";
 import type { Equipment, EquipmentFilter, PageData } from "../../lib/types";
 import { categoryIcon, categoryTone, Icon, KNOWN_CATEGORIES } from "../icons";
@@ -19,8 +20,10 @@ function CategoryTag({ category }: { category: string }) {
   return <span className={`cat-tag tone-${categoryTone(category)}`}>{category}</span>;
 }
 
-export function EquipmentView({ equipment, filter, canManage, canReserve, onFilterChange, onLoad, onReset, onCreate, onReserve, onReport, onRetire, onRestore }: {
+export function EquipmentView({ equipment, categories, filter, canManage, canReserve, onFilterChange, onLoad, onReset, onCreate, onReserve, onReport, onRetire, onRestore }: {
   equipment: PageData<Equipment> | null;
+  /** Every category in use (GET /api/equipment/categories); null while loading or if that request failed. */
+  categories: string[] | null;
   filter: EquipmentFilter;
   canManage: boolean;
   /** Technicians repair equipment; they cannot book it (POST /api/reservations rejects them). */
@@ -37,8 +40,9 @@ export function EquipmentView({ equipment, filter, canManage, canReserve, onFilt
   const [detail, setDetail] = useState<Equipment | null>(null);
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const items = equipment?.content ?? [];
-  // Free-text categories that already exist stay selectable next to the styled ones.
-  const categories = [...new Set([...KNOWN_CATEGORIES, ...items.map((item) => item.category), filter.category].filter(Boolean))];
+  // Options come from their own request, never from the filtered, paged rows on screen;
+  // the chosen value stays listed so the select can always show it.
+  const categoryOptions = [...new Set([...(categories ?? KNOWN_CATEGORIES), filter.category].filter(Boolean))];
 
   return <div className="view-stack">
     <section className="filter-bar" aria-label="设备筛选">
@@ -54,7 +58,7 @@ export function EquipmentView({ equipment, filter, canManage, canReserve, onFilt
       <label className="filter-field">设备类别
         <select data-equipment-filter="category" value={filter.category} onChange={(e) => onFilterChange({ ...filter, category: e.target.value })}>
           <option value="">全部类别</option>
-          {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+          {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
         </select>
       </label>
       <div className="search">
@@ -72,7 +76,7 @@ export function EquipmentView({ equipment, filter, canManage, canReserve, onFilt
       </header>
       {items.length > 0 && <div className="table-scroll"><table className="equipment-table">
         <thead><tr><th>设备名称</th><th>设备编号</th><th>类别</th><th>所在位置</th><th>负责人</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody>{items.map((item, index) => {
+        <tbody>{items.map((item) => {
           const blocked = reserveBlockedReason(item.status);
           const menu = [
             item.status !== "RETIRED" && { key: "report", label: "故障报修", onClick: () => onReport(item) },
@@ -92,8 +96,7 @@ export function EquipmentView({ equipment, filter, canManage, canReserve, onFilt
             <td><div className="equipment-actions">
               <button type="button" className="ghost-button" data-action="view" onClick={() => setDetail(item)}>查看</button>
               {canReserve && <button type="button" className="solid-button" data-action="reserve" disabled={Boolean(blocked)} title={blocked} onClick={() => onReserve(item)}>预约</button>}
-              {/* The table scrolls sideways, which clips overflow: menus near the bottom open upwards. */}
-              {menu.length > 0 && <MoreMenu open={menuFor === item.id} up={items.length > 2 && index >= items.length - 2} label={`${item.name} 更多操作`} entries={menu}
+              {menu.length > 0 && <MoreMenu id={item.id} open={menuFor === item.id} label={`${item.name} 更多操作`} entries={menu}
                 onToggle={(open) => setMenuFor(open ? item.id : null)} />}
             </div></td>
           </tr>;
@@ -112,12 +115,47 @@ export function EquipmentView({ equipment, filter, canManage, canReserve, onFilt
 
 type MenuEntry = { key: string; label: string; danger?: boolean; onClick: () => void };
 
-function MoreMenu({ open, up, label, entries, onToggle }: { open: boolean; up: boolean; label: string; entries: MenuEntry[]; onToggle: (open: boolean) => void }) {
-  const root = useRef<HTMLDivElement>(null);
+const MENU_GAP = 6;
+
+/**
+ * The table sits in a sideways-scrolling container, and overflow-x: auto clips
+ * vertical overflow too. The list is therefore portalled to <body> and placed
+ * with fixed coordinates next to its button, so no row count can clip it.
+ * It opens upwards only when the viewport has no room below.
+ */
+function MoreMenu({ id, open, label, entries, onToggle }: { id: number; open: boolean; label: string; entries: MenuEntry[]; onToggle: (open: boolean) => void }) {
+  const button = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    // Fixed coordinates: re-place on scroll and resize so the list stays next to its button.
+    const place = () => {
+      const menu = list.current;
+      const anchor = button.current?.getBoundingClientRect();
+      if (!menu || !anchor) return;
+      const fitsBelow = anchor.bottom + MENU_GAP + menu.offsetHeight <= window.innerHeight;
+      menu.style.top = `${fitsBelow ? anchor.bottom + MENU_GAP : Math.max(MENU_GAP, anchor.top - MENU_GAP - menu.offsetHeight)}px`;
+      menu.style.left = `${Math.max(MENU_GAP, anchor.right - menu.offsetWidth)}px`;
+      menu.style.visibility = "visible";
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    const onOutside = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) onToggle(false); };
-    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onToggle(false); };
+    const close = () => onToggle(false);
+    const onOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!button.current?.contains(target) && !list.current?.contains(target)) close();
+    };
+    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("mousedown", onOutside);
     document.addEventListener("keydown", onEscape);
     return () => {
@@ -126,14 +164,14 @@ function MoreMenu({ open, up, label, entries, onToggle }: { open: boolean; up: b
     };
   }, [open, onToggle]);
 
-  return <div className="more-menu" ref={root}>
-    <button type="button" className="icon-button" data-action="more" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => onToggle(!open)}>
+  return <div className="more-menu">
+    <button ref={button} type="button" className="icon-button" data-action="more" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => onToggle(!open)}>
       <Icon name="more" size={18} />
     </button>
-    {open && <div className={`more-menu-list${up ? " up" : ""}`} role="menu">
+    {open && createPortal(<div ref={list} className="more-menu-list" role="menu" aria-label={label} data-menu-for={id}>
       {entries.map((entry) => <button key={entry.key} type="button" role="menuitem" data-menu={entry.key} className={entry.danger ? "danger" : ""}
         onClick={() => { onToggle(false); entry.onClick(); }}>{entry.label}</button>)}
-    </div>}
+    </div>, document.body)}
   </div>;
 }
 

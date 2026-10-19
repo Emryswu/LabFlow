@@ -49,13 +49,14 @@ const fleet = [
   device(5, "自定义仪器", "自制装置", "AVAILABLE", { manufacturer: null, model: null, responsiblePerson: null }),
 ];
 const page = (content, total = content.length) => ({ content, page: 0, size: 30, totalElements: total, totalPages: 1 });
+const allCategories = (devices) => [...new Set(devices.map((item) => item.category))].sort();
 const emptyFilter = { keyword: "", status: "", category: "" };
 const noop = () => {};
 
 function renderView(props = {}) {
   const { EquipmentView } = loadComponent("components/views/EquipmentView.tsx");
   return renderToStaticMarkup(React.createElement(EquipmentView, {
-    equipment: page(fleet), filter: emptyFilter, canManage: true, canReserve: true,
+    equipment: page(fleet), categories: allCategories(fleet), filter: emptyFilter, canManage: true, canReserve: true,
     onFilterChange: noop, onLoad: noop, onReset: noop, onCreate: noop, onReserve: noop, onReport: noop, onRetire: noop, onRestore: noop,
     ...props,
   }));
@@ -71,9 +72,8 @@ test("equipment renders as a table with category tags and state dots", () => {
   assert.ok(rowOf(html, 1).includes('class="cat-tag tone-blue">显微成像'));
   assert.ok(rowOf(html, 1).includes('class="state state-ok"'));
   assert.ok(rowOf(html, 3).includes('class="state state-warn"'));
-  // A free-text category keeps a neutral tag and stays selectable in the filter.
+  // A free-text category keeps a neutral tag.
   assert.ok(rowOf(html, 5).includes('class="cat-tag tone-graphite">自制装置'));
-  assert.ok(html.includes('<option value="自制装置">自制装置</option>'));
   assert.ok(rowOf(html, 5).includes("厂商型号待补充") && rowOf(html, 5).includes("待分配"));
   assert.ok(html.includes("新增设备"));
 });
@@ -96,6 +96,20 @@ test("roles decide which actions exist", () => {
   assert.ok(rowOf(technician, 3).includes('data-action="more"'), "anyone can report a fault");
 });
 
+test("category options come from the categories prop, not from the rows on screen", () => {
+  // React marks the selected option with selected="", so match the value attribute only.
+  const option = (value) => `<option value="${value}"`;
+  // No rows at all, yet every category in use is offered.
+  const empty = renderView({ equipment: page([]), categories: ["外借仪器", "显微成像"] });
+  assert.ok(empty.includes(option("外借仪器")) && empty.includes(option("显微成像")));
+  assert.ok(!empty.includes(option("样品制备")), "only categories in use, not every styled one");
+  // A chosen value stays visible even if it is not in the list yet.
+  assert.ok(renderView({ categories: [], filter: { ...emptyFilter, category: "新类别" } }).includes(option("新类别")));
+  // While loading or after a failed request, fall back to the styled categories.
+  const fallback = renderView({ categories: null });
+  assert.ok(fallback.includes(option("结构分析")) && !fallback.includes(option("自制装置")));
+});
+
 test("a page that is not the full result says so", () => {
   assert.ok(renderView({ equipment: page(fleet, 42) }).includes("当前显示最近添加的 5 台"));
   assert.ok(!renderView().includes("table-note"));
@@ -112,7 +126,7 @@ async function waitFor(check) {
 }
 
 /** Mounts the real page signed in as `role` and opens the equipment view. */
-async function openEquipment(t, role) {
+async function openEquipment(t, role, devices = fleet) {
   const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
   const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
   const previous = Object.fromEntries(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
@@ -145,11 +159,14 @@ async function openEquipment(t, role) {
         case "/api/dashboard/trends": return null;
         case "/api/reservations": return page([]);
         case "/api/work-orders": return page([]);
+        case "/api/equipment/categories": return allCategories(devices);
         case "/api/equipment": {
           if (url.searchParams.get("size") === "30") equipmentQueries.push(url.searchParams);
           const status = url.searchParams.get("status");
           const category = url.searchParams.get("category");
-          return page(fleet.filter((item) => (!status || item.status === status) && (!category || item.category === category)));
+          const matches = devices.filter((item) => (!status || item.status === status) && (!category || item.category === category));
+          const size = Number(url.searchParams.get("size") ?? 20);
+          return page(matches.slice(0, size), matches.length);
         }
         default: throw new Error(`Unexpected API request: ${path}`);
       }
@@ -159,11 +176,14 @@ async function openEquipment(t, role) {
   await act(async () => root.render(React.createElement(Home)));
   await waitFor(() => container.querySelector('[data-nav="equipment"]'));
   await act(async () => container.querySelector('[data-nav="equipment"]').click());
-  await waitFor(() => container.querySelectorAll(".equipment-table tbody tr").length === fleet.length);
+  await waitFor(() => container.querySelectorAll(".equipment-table tbody tr").length === Math.min(devices.length, 30));
   return { container, equipmentQueries, mutations };
 }
 
 const row = (container, id) => container.querySelector(`[data-equipment-id="${id}"]`);
+const menuOf = (id) => document.querySelector(`[data-menu-for="${id}"]`);
+const menuEntries = (id) => [...(menuOf(id)?.querySelectorAll("[data-menu]") ?? [])].map((node) => node.dataset.menu);
+const categoryOptions = (container) => [...container.querySelector('[data-equipment-filter="category"]').options].map((option) => option.value);
 async function change(select, value) {
   await act(async () => {
     select.value = value;
@@ -202,9 +222,8 @@ test("the row menu reports a fault with the device chosen; only managers can ret
   const { container } = await openEquipment(t, "STUDENT");
   assert.equal(row(container, 4).querySelector('[data-action="more"]'), null, "a retired device offers a student nothing");
   await act(async () => row(container, 3).querySelector('[data-action="more"]').click());
-  const entries = [...row(container, 3).querySelectorAll("[data-menu]")].map((node) => node.dataset.menu);
-  assert.deepEqual(entries, ["report"]);
-  await act(async () => row(container, 3).querySelector('[data-menu="report"]').click());
+  assert.deepEqual(menuEntries(3), ["report"]);
+  await act(async () => menuOf(3).querySelector('[data-menu="report"]').click());
   await waitFor(() => container.querySelector(".modal"));
   assert.equal(container.querySelector(".modal select").value, "3");
 });
@@ -212,17 +231,17 @@ test("the row menu reports a fault with the device chosen; only managers can ret
 test("managers retire available devices and restore retired ones from the menu", async (t) => {
   const { container, mutations } = await openEquipment(t, "ADMIN");
   await act(async () => row(container, 1).querySelector('[data-action="more"]').click());
-  assert.deepEqual([...row(container, 1).querySelectorAll("[data-menu]")].map((node) => node.dataset.menu), ["report", "retire"]);
-  await act(async () => row(container, 1).querySelector('[data-menu="retire"]').click());
+  assert.deepEqual(menuEntries(1), ["report", "retire"]);
+  await act(async () => menuOf(1).querySelector('[data-menu="retire"]').click());
   await waitFor(() => mutations.length === 1);
   assert.deepEqual(mutations, ["PATCH /api/equipment/1/retire"]);
-  assert.equal(row(container, 1).querySelector("[data-menu]"), null, "choosing an entry closes the menu");
+  assert.equal(menuOf(1), null, "choosing an entry closes the menu");
 
   await act(async () => row(container, 4).querySelector('[data-action="more"]').click());
-  assert.deepEqual([...row(container, 4).querySelectorAll("[data-menu]")].map((node) => node.dataset.menu), ["restore"]);
+  assert.deepEqual(menuEntries(4), ["restore"]);
   // Clicking elsewhere closes the menu without acting.
   await act(async () => document.body.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true })));
-  assert.equal(row(container, 4).querySelector("[data-menu]"), null);
+  assert.equal(menuOf(4), null);
   assert.equal(mutations.length, 1);
 });
 
@@ -235,4 +254,47 @@ test("technicians see the list and can report faults but cannot book", async (t)
   const detail = container.querySelector(".equipment-detail").textContent;
   assert.ok(detail.includes("ZEISS") && detail.includes("2022-09-15") && detail.includes("故障报修"));
   assert.ok(!detail.includes("预约这台设备"));
+});
+
+test("a custom category stays selectable after a status filter hides its devices", async (t) => {
+  const { container } = await openEquipment(t, "TEACHER");
+  assert.ok(categoryOptions(container).includes("自制装置"));
+  await change(container.querySelector('[data-equipment-filter="status"]'), "MAINTENANCE");
+  await act(async () => container.querySelector('[data-action="search"]').click());
+  await waitFor(() => container.querySelectorAll(".equipment-table tbody tr").length === 1);
+  assert.ok(!container.querySelector(".equipment-table").textContent.includes("自制装置"), "its device is filtered out");
+  assert.ok(categoryOptions(container).includes("自制装置"), "but the category is still offered");
+});
+
+test("a custom category used only beyond the first page is still offered", async (t) => {
+  const filler = Array.from({ length: 30 }, (_, index) => device(100 + index, `批量显微镜 ${index}`, "显微成像", "AVAILABLE"));
+  const { container } = await openEquipment(t, "TEACHER", [...filler, device(200, "第 31 台", "外借仪器", "AVAILABLE")]);
+  assert.equal(row(container, 200), null, "the device is not on the first page");
+  assert.ok(categoryOptions(container).includes("外借仪器"));
+});
+
+for (const [name, keep] of [["one row", [1]], ["two rows", [1, 2]], ["the last of many rows", fleet.map((item) => item.id)]]) {
+  test(`the row menu is outside the scrolling table with ${name}`, async (t) => {
+    const { container } = await openEquipment(t, "ADMIN", fleet.filter((item) => keep.includes(item.id)));
+    const last = keep.at(-1);
+    await act(async () => row(container, last).querySelector('[data-action="more"]').click());
+    const menu = menuOf(last);
+    assert.ok(menu, "menu opened");
+    // overflow-x: auto on .table-scroll clips anything rendered inside it.
+    assert.equal(menu.closest(".table-scroll"), null);
+    assert.equal(menu.parentElement, document.body);
+    await act(async () => menu.querySelector('[data-menu="report"]').click());
+    await waitFor(() => container.querySelector(".modal"));
+    assert.equal(container.querySelector(".modal select").value, String(last));
+  });
+}
+
+test("scrolling keeps an open menu open (it follows its button)", async (t) => {
+  // Clicking a half-visible button can scroll it into view; closing on scroll
+  // would shut the menu the moment it opened.
+  const { container } = await openEquipment(t, "ADMIN");
+  await act(async () => row(container, 1).querySelector('[data-action="more"]').click());
+  await act(async () => window.dispatchEvent(new window.Event("scroll")));
+  assert.ok(menuOf(1));
+  assert.equal(menuOf(1).style.visibility, "visible");
 });

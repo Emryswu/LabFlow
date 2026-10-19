@@ -54,6 +54,8 @@ export default function Home() {
   const [trends, setTrends] = useState<Trends | null>(null);
   const [equipment, setEquipment] = useState<PageData<Equipment> | null>(null);
   const [dashboardEquipment, setDashboardEquipment] = useState<PageData<Equipment> | null>(null);
+  // Category filter options, loaded apart from the filtered, paged list so neither can hide one.
+  const [equipmentCategories, setEquipmentCategories] = useState<string[] | null>(null);
   const [reservations, setReservations] = useState<PageData<Reservation> | null>(null);
   const [scheduleReservations, setScheduleReservations] = useState<Reservation[] | null>(null);
   const [workorders, setWorkorders] = useState<PageData<WorkOrder> | null>(null);
@@ -95,6 +97,7 @@ export default function Home() {
     setTrends(null);
     setEquipment(null);
     setDashboardEquipment(null);
+    setEquipmentCategories(null);
     setReservations(null);
     setScheduleReservations(null);
     setWorkorders(null);
@@ -159,9 +162,14 @@ export default function Home() {
         if (filter.keyword) query.set("keyword", filter.keyword);
         if (filter.status) query.set("status", filter.status);
         if (filter.category) query.set("category", filter.category);
-        const equipmentData = await api<PageData<Equipment>>(`/api/equipment?${query}`, token, { signal: controller.signal });
+        const [equipmentData, categories] = await Promise.all([
+          api<PageData<Equipment>>(`/api/equipment?${query}`, token, { signal: controller.signal }),
+          // Optional: without it the filter falls back to the styled categories.
+          api<string[]>("/api/equipment/categories", token, { signal: controller.signal }).catch(() => null),
+        ]);
         if (isCurrentSessionRequest() && requestSequence === equipmentRequestSequence.current) {
           setEquipment(equipmentData);
+          setEquipmentCategories(categories);
         }
       } else if (target === "reservations") {
         const query = new URLSearchParams({ size: "30", sort: "createdAt,desc" });
@@ -380,7 +388,7 @@ export default function Home() {
       {activeView !== "dashboard" && <WorkspaceHeader user={user} view={activeView} onRefresh={() => void load(activeView)} />}
       {pageLoading && <div className="loading-bar"><span></span></div>}
       {activeView === "dashboard" && <DashboardView user={user} stats={stats} trends={trends} reservations={reservations} workorders={workorders} equipment={dashboardEquipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
-      {activeView === "equipment" && <EquipmentView equipment={equipment} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
+      {activeView === "equipment" && <EquipmentView equipment={equipment} categories={equipmentCategories} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
       {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
       {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
       {activeView === "audit" && <AuditView auditLogs={auditLogs} />}
