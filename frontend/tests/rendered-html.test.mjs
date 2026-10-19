@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
+import { JSDOM } from "jsdom";
+import { LOGIN } from "../../.github/screenshots/shots.mjs";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -51,6 +53,24 @@ test("server-renders LabFlow login shell", async () => {
   assert.match(html, /LabFlow/i);
   assert.match(html, /实验室设备运营平台|设备预约与维护|进入设备运行台|进入 LabFlow/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton|Codex is building/i);
+});
+
+test("README screenshot login selectors match the rendered login form", async (t) => {
+  const response = await render();
+  assert.equal(response.status, 200);
+  const dom = new JSDOM(await response.text());
+  t.after(() => dom.window.close());
+  const document = dom.window.document;
+
+  assert.ok(document.querySelector(LOGIN.ready), `login readiness selector: ${LOGIN.ready}`);
+  const form = document.querySelector(LOGIN.submit)?.closest("form");
+  assert.ok(form, `login submit selector must belong to a form: ${LOGIN.submit}`);
+  for (const key of ["username", "password", "submit"]) {
+    assert.equal(form.querySelectorAll(LOGIN[key]).length, 1, `${key} selector must match exactly one login control: ${LOGIN[key]}`);
+  }
+  assert.equal(form.querySelector(LOGIN.username).tagName, "INPUT");
+  assert.equal(form.querySelector(LOGIN.password).type, "password");
+  assert.equal(form.querySelector(LOGIN.submit).type, "submit");
 });
 
 test("keeps LabFlow app source structure without starter skeleton", async () => {

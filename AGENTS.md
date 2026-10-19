@@ -12,6 +12,7 @@
 | `benchmark/` | 并发压测脚本（Python）与结果，`RESULTS.md` 是对外引用的数据来源 |
 | `scripts/`、根目录 `*.ps1` | Windows 本地起栈、生产 profile 起停与验证脚本 |
 | `docs/` | `concurrency-notes.md` 并发设计说明，`screenshots/` 是 README 用图 |
+| `.github/screenshots/` | README 截图的页面清单（`shots.mjs`）与截图脚本，由 `readme-screenshots.yml` 运行 |
 
 ## 命令
 
@@ -34,6 +35,11 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 - 类型检查：`npm run typecheck`（`tsc --noEmit`；lint 和测试的 TS 转译都不做类型检查，类型错误只有这一步拦得住）
 - 测试：`npm test`，先 `vinext build` 生产构建，再跑 `tests/**/*.test.mjs`。CI 跑在 UTC，断言渲染出的日期或时分时，测试数据用 `new Date(年, 月, 日, 时, 分)` 按本地时间构造，不要写死带时区的字符串；本地可用 `TZ=UTC npm test` 复查。
 - 本地开发：`npm run dev`，后端地址见 `frontend/.env.example`（默认 `http://127.0.0.1:18080`）。
+
+**README 截图**
+
+- 截图只来自真实运行的服务，不用假后端或手工拼图。改了界面后先推送自己的分支，再对该分支手动运行「README 截图」workflow（`gh workflow run readme-screenshots.yml --ref <分支>`），它会起栈、按角色截图并提交回该分支，不能在 main 上运行。截图提交由 workflow 令牌推送，不会触发 CI，之后再推一次自己的提交即可让 CI 覆盖最新状态。
+- 要拍的页面和等待的选择器写在 `.github/screenshots/shots.mjs`；`frontend/tests/readme-screenshots.test.mjs` 检查类名和 `data-*` 属性仍存在、清单与 README 引用的图一致；`rendered-html.test.mjs` 用完整登录选择器查询真实渲染的表单，覆盖 `autocomplete` 的属性值。改界面时如果它们失败，同步改 `shots.mjs`。
 
 **提交信息检查**（在仓库根目录下）
 

@@ -1,0 +1,8 @@
+{
+  "name": "labflow-readme-screenshots",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.56.0"
+  }
+}
