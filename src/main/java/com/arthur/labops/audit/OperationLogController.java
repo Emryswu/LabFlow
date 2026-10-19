@@ -22,9 +22,10 @@ public class OperationLogController {
     @GetMapping
     PageResponse<OperationLogResponse> findAll(
             @RequestParam(required = false) String actorUsername,
+            @RequestParam(required = false) String actorRole,
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String targetType,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageResponse.from(queryService.findAll(actorUsername, action, targetType, pageable));
+        return PageResponse.from(queryService.findAll(actorUsername, actorRole, action, targetType, pageable));
     }
 }

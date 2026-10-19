@@ -3,8 +3,8 @@ import { statusLabels } from "../lib/labels";
 import type { ToastState } from "../lib/types";
 import { Icon } from "./icons";
 
-export function Brand({ light = false, mobile = false }: { light?: boolean; mobile?: boolean }) {
-  return <div className={`${mobile ? "mobile-brand " : ""}brand ${light ? "light" : ""}`}>
+export function Brand({ light = false }: { light?: boolean }) {
+  return <div className={`brand ${light ? "light" : ""}`}>
     <span className="brand-mark" aria-hidden="true">
       <svg viewBox="0 0 32 32" width="32" height="32">
         <path d="M9 3h10l8 6v12l-8 8H9l-6-6V9z" fill="var(--orange)" />
@@ -25,7 +25,7 @@ export function Modal({ title, subtitle, onClose, children }: { title: string; s
     <section className="modal" role="dialog" aria-modal="true" aria-label={title}>
       <header>
         <div><h2>{title}</h2><p>{subtitle}</p></div>
-        <button className="icon-button" onClick={onClose} aria-label="关闭">×</button>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="关闭"><Icon name="close" size={18} /></button>
       </header>
       {children}
     </section>

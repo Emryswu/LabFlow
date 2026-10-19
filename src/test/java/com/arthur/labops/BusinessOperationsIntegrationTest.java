@@ -1,6 +1,8 @@
 package com.arthur.labops;
 
 import static com.arthur.labops.TestAuth.bearer;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -74,6 +76,22 @@ class BusinessOperationsIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(mockMvc, objectMapper, "admin", "admin123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].action").value("RESERVATION_COMPLETED"));
+
+        // Role filter combines with the action filter: the teacher completed it, a student never can.
+        mockMvc.perform(get("/api/audit-logs")
+                        .param("actorRole", "teacher")
+                        .param("action", "RESERVATION_COMPLETED")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(mockMvc, objectMapper, "admin", "admin123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].action").value("RESERVATION_COMPLETED"))
+                .andExpect(jsonPath("$.content[*].actorRole", everyItem(is("TEACHER"))));
+
+        mockMvc.perform(get("/api/audit-logs")
+                        .param("actorRole", "STUDENT")
+                        .param("action", "RESERVATION_COMPLETED")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(mockMvc, objectMapper, "admin", "admin123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
 
         mockMvc.perform(get("/api/audit-logs")
                         .header(HttpHeaders.AUTHORIZATION, bearer(mockMvc, objectMapper, "student", "student123")))
