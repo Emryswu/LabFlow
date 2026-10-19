@@ -68,7 +68,8 @@ function backendAuditActions() {
 const page = (content, extra = {}) => ({ content, page: 0, size: 20, totalElements: content.length, totalPages: 1, ...extra });
 const log = (id, actorRole, action, extra = {}) => ({
   id, actorUsername: actorRole === "SYSTEM" ? "system" : actorRole.toLowerCase(), actorRole, action,
-  targetType: "WORK_ORDER", targetId: 2, details: "工单从 ASSIGNED 流转到 IN_PROGRESS", createdAt: "2026-10-19T09:05:07+08:00", ...extra,
+  // Built in local time so the rendered date and clock match on any CI time zone.
+  targetType: "WORK_ORDER", targetId: 2, details: "工单从 ASSIGNED 流转到 IN_PROGRESS", createdAt: new Date(2026, 9, 19, 9, 5, 7).toISOString(), ...extra,
 });
 const noop = () => {};
 

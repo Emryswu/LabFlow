@@ -32,7 +32,7 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 - 安装：`npm ci`
 - lint：`npm run lint`
 - 类型检查：`npm run typecheck`（`tsc --noEmit`；lint 和测试的 TS 转译都不做类型检查，类型错误只有这一步拦得住）
-- 测试：`npm test`，先 `vinext build` 生产构建，再跑 `tests/**/*.test.mjs`。
+- 测试：`npm test`，先 `vinext build` 生产构建，再跑 `tests/**/*.test.mjs`。CI 跑在 UTC，断言渲染出的日期或时分时，测试数据用 `new Date(年, 月, 日, 时, 分)` 按本地时间构造，不要写死带时区的字符串；本地可用 `TZ=UTC npm test` 复查。
 - 本地开发：`npm run dev`，后端地址见 `frontend/.env.example`（默认 `http://127.0.0.1:18080`）。
 
 **提交信息检查**（在仓库根目录下）
