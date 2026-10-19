@@ -254,20 +254,59 @@ label { display: grid; gap: 7px; color: #4d4641; font-size: 13px; font-weight: 6
 .search input { height: 42px; padding-left: 36px; font-size: 13px; }
 .spacer { flex: 1; }
 .table-panel { overflow: visible; }
+
+/* Equipment list: filter bar + table, following the equipment-list mockup */
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 18px; border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
+.filter-field { display: flex; align-items: center; gap: 10px; color: #3d424a; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.filter-field select { width: 150px; height: 38px; font-size: 13px; }
+.filter-bar .search { flex: 1 1 260px; max-width: 380px; }
+.filter-bar .search span { top: 10px; }
+.filter-bar .search input { height: 38px; }
+.filter-bar .solid-button, .filter-bar .ghost-button { height: 38px; padding: 0 20px; font-size: 13px; }
+.equipment-panel > header h3 small { margin-left: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+/* Beats the generic quiet ".panel > header button" link style. */
+.equipment-panel > header .primary { min-height: 38px; padding: 0 16px; gap: 6px; border: 1px solid var(--accent); color: white; background: var(--accent); font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(232, 98, 26, .22); }
+.equipment-panel > header .primary:hover { border-color: var(--accent-dark); color: white; background: var(--accent-dark); }
+.equipment-table th:last-child, .equipment-table td:last-child { width: 1%; }
+.equipment-table td { padding: 12px 15px; }
+.equipment-table td.mono, .equipment-table td:nth-child(4), .equipment-table td:nth-child(5) { white-space: nowrap; }
+.equipment-table tbody tr:hover { background: #fafbfc; }
+.equipment-name { display: flex; align-items: center; gap: 12px; min-width: 220px; }
+.equipment-name .equip-thumb, .equipment-detail .equip-thumb { width: 44px; height: 44px; flex: 0 0 auto; }
+.equipment-name b, .equipment-name small { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.equipment-name b { color: var(--ink); font-size: 14px; font-weight: 700; }
+.equipment-name small { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.muted { color: #9aa0a8; }
+.cat-tag { display: inline-flex; padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tone-violet { color: #6d4fc7; background: #f1edfc; }
+.state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.state-ok { color: #1f8a4c; background: #e8f6ee; }
+.state-info { color: #2f6fd0; background: #eaf1fd; }
+.state-warn { color: #c4600f; background: #fff1e4; }
+.state-idle { color: #6b7079; background: #eff0f2; }
+.equipment-actions { display: flex; align-items: center; gap: 8px; }
+.equipment-actions .ghost-button, .equipment-actions .solid-button { height: 32px; padding: 0 14px; }
+.more-menu { position: relative; }
+.more-menu .icon-button { width: 32px; height: 32px; border-color: transparent; }
+.more-menu .icon-button:hover, .more-menu .icon-button[aria-expanded="true"] { border-color: var(--line); color: var(--ink); background: #f4f5f7; }
+/* Portalled to <body>; MoreMenu sets top/left and reveals it once measured. */
+.more-menu-list { position: fixed; z-index: 40; top: 0; left: 0; visibility: hidden; display: grid; min-width: 132px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow-hover); }
+.more-menu-list button { padding: 9px 12px; border: 0; border-radius: 6px; color: #3d424a; background: transparent; text-align: left; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.more-menu-list button:hover { background: #f4f5f7; }
+.more-menu-list button.danger { color: var(--danger); }
+.more-menu-list button.danger:hover { background: #fff3f2; }
+.table-note { margin: 0; padding: 12px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.equipment-detail { display: grid; gap: 16px; padding: 22px 24px; }
+.equipment-detail-head { display: flex; align-items: center; gap: 10px; }
+.equipment-detail > p { margin: 0; color: #4b5058; font-size: 13px; line-height: 1.7; }
+.equipment-detail dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; margin: 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.equipment-detail dl div { display: grid; gap: 4px; }
+.equipment-detail dt { color: var(--muted); font-size: 12px; }
+.equipment-detail dd { margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+.equipment-detail footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.equipment-detail footer .muted { font-size: 12px; }
 .table-scroll { overflow-x: auto; }
-.equipment-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 18px; }
-.equipment-card { display: grid; gap: 15px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
-.equipment-card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.equipment-code { color: #9f3b20; font-family: Consolas, "SF Mono", Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: .6px; }
-.equipment-identity { display: flex; align-items: center; gap: 12px; }
-.equipment-identity > span { display: grid; flex: 0 0 auto; width: 42px; height: 42px; place-items: center; border-radius: 10px; color: var(--accent-text); background: var(--soft-accent); font-size: 17px; }
-.equipment-identity h4 { margin: 0; font-size: 16px; }
-.equipment-identity p { margin: 4px 0 0; color: #6e6b64; font-size: 12px; }
-.equipment-description { min-height: 38px; margin: 0; color: #545049; font-size: 12px; line-height: 1.65; }
-.equipment-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; margin: 0; padding-top: 13px; border-top: 1px dashed #ddd7d1; }
-.equipment-card dl div { display: grid; gap: 3px; }
-.equipment-card dt { color: #706a65; font-size: 11px; }
-.equipment-card dd { margin: 0; color: #3a3631; font-size: 12px; font-weight: 600; }
 table { width: 100%; border-collapse: collapse; }
 th { height: 42px; padding: 0 15px; border-bottom: 1px solid var(--line); color: #5b6068; background: #f7f8fa; text-align: left; font-size: 12px; font-weight: 650; letter-spacing: .3px; white-space: nowrap; }
 td { min-height: 62px; padding: 13px 15px; border-bottom: 1px solid #e8e5e1; color: #443f3a; font-size: 13px; vertical-align: middle; }
@@ -401,7 +440,6 @@ tbody tr:hover { background: #faf8f5; }
   .dashboard-grid, .dashboard-grid.lower { grid-template-columns: minmax(0, 1fr); }
   .hero-motto { display: none; }
   .hero::before { background: linear-gradient(90deg, #fefefc 45%, rgba(254,254,252,.55) 75%, rgba(254,254,252,.1) 100%); }
-  .equipment-card-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
@@ -452,6 +490,12 @@ tbody tr:hover { background: #faf8f5; }
   .toolbar .spacer { display: none; }
   .toolbar > button.primary { grid-column: 1 / -1; }
   .field-grid { grid-template-columns: 1fr; }
+  .filter-bar { padding: 10px; gap: 8px; }
+  .filter-field { flex: 1 1 calc(50% - 4px); min-width: 0; gap: 6px; }
+  .filter-field select { flex: 1; width: auto; min-width: 0; }
+  .filter-bar .search { flex-basis: 100%; max-width: none; }
+  .filter-bar .solid-button, .filter-bar .ghost-button { flex: 1; }
+  .equipment-detail dl { grid-template-columns: 1fr; }
   .sidebar { position: sticky; top: 0; min-height: 62px; padding: 10px 13px; flex-wrap: nowrap; }
   .sidebar .brand div, .sidebar .profile > div:nth-child(2) { display: none; }
   .sidebar .brand-mark { width: 36px; height: 36px; }

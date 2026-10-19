@@ -109,18 +109,18 @@ test("late dashboard equipment cannot replace a completed equipment filter", asy
   await act(async () => root.render(React.createElement(Home)));
   await waitFor(() => dashboardEquipmentRequested);
   await act(async () => container.querySelector('[data-nav="equipment"]').click());
-  await waitFor(() => container.querySelectorAll(".equipment-card").length === 2);
-  const filter = container.querySelector(".toolbar select");
+  await waitFor(() => container.querySelectorAll(".equipment-table tbody tr").length === 2);
+  const filter = container.querySelector('[data-equipment-filter="status"]');
   await act(async () => {
     filter.value = "MAINTENANCE";
     filter.dispatchEvent(new window.Event("change", { bubbles: true }));
   });
-  await act(async () => container.querySelector(".toolbar .secondary").click());
-  await waitFor(() => container.querySelectorAll(".equipment-card").length === 1);
+  await act(async () => container.querySelector('[data-action="search"]').click());
+  await waitFor(() => container.querySelectorAll(".equipment-table tbody tr").length === 1);
 
   await act(async () => { releaseDashboard(page(equipment)); await dashboardResponse; });
   assert.equal(filter.value, "MAINTENANCE");
-  assert.deepEqual([...container.querySelectorAll(".equipment-card h4")].map((node) => node.textContent), ["维修离心机"]);
+  assert.deepEqual([...container.querySelectorAll(".equipment-name b")].map((node) => node.textContent), ["维修离心机"]);
 
   // The dashboard still gets the complete name lookup, including the device
   // excluded by the equipment page's maintenance filter.

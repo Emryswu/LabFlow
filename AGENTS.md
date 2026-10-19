@@ -61,6 +61,8 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 - 颜色、圆角、阴影用 `app/globals.css` 里 `:root` 的变量，不另起一套。
 - 图标用 `app/components/icons.tsx` 的 `Icon`，缺的图标加进那个文件，不用 Unicode 字符充当图标。设备没有照片字段，按类别用 `categoryIcon` 显示图标。
 - 角色导航以 `app/lib/roles.ts` 的 `navItemsForRole` 为准；`tests/rendered-html.test.mjs` 里有一份对照，改导航时两处一起改。
+- 筛选项（下拉选项、标签列表）不要从当前页、已筛选的列表数据里推导：换页或加筛选后选项会消失。由后端单独接口提供，例如设备类别用 `GET /api/equipment/categories`。测试要覆盖「筛选后」和「数据在第一页之外」两种情况。
+- 菜单、下拉层等浮层不要渲染在 `overflow` 滚动容器里（表格外层的 `.table-scroll` 会裁掉纵向溢出），用 portal 挂到 `body` 再按触发按钮定位，参照 `EquipmentView` 的 `MoreMenu`。测试至少覆盖一行、两行和末行三种情况。
 
 ## 编辑方式
 

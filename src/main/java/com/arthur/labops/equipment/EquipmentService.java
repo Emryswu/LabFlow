@@ -1,7 +1,7 @@
 package com.arthur.labops.equipment;
 
-import java.util.Set;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -163,6 +163,15 @@ public class EquipmentService {
                     builder.like(builder.lower(root.get("location")), pattern)));
         }
         return equipmentRepository.findAll(specification, pageable).map(EquipmentResponse::from);
+    }
+
+    /**
+     * Options for the list's category filter. Kept apart from {@link #findAll} so a
+     * status filter or a page boundary never hides a category the user can pick.
+     */
+    @Transactional(readOnly = true)
+    public List<String> findCategories() {
+        return equipmentRepository.findDistinctCategories();
     }
 
     private String normalize(String value) {

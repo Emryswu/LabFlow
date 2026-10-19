@@ -25,6 +25,8 @@ export type Trends = {
 export type PageData<T> = { content: T[]; page: number; size: number; totalElements: number; totalPages: number };
 export type Technician = { id: number; username: string; displayName: string };
 
+/** Filters of the equipment list; empty strings mean "any". */
+export type EquipmentFilter = { keyword: string; status: string; category: string };
 export type EquipmentForm = { code: string; name: string; category: string; location: string; manufacturer: string; model: string; responsiblePerson: string; purchaseDate: string; description: string };
 export type ReservationForm = { equipmentId: string; purpose: string; startTime: string; endTime: string };
 export type WorkOrderForm = { equipmentId: string; title: string; description: string; priority: string };

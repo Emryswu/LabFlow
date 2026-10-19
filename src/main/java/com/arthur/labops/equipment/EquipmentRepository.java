@@ -1,5 +1,6 @@
 package com.arthur.labops.equipment;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,4 +20,8 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>, Jpa
     Optional<Equipment> findByIdForUpdate(@Param("id") Long id);
 
     long countByStatus(EquipmentStatus status);
+
+    /** Every category in use, retired equipment included, independent of any list filter or page. */
+    @Query("select distinct equipment.category from Equipment equipment order by equipment.category")
+    List<String> findDistinctCategories();
 }

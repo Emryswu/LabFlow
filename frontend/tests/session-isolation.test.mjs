@@ -20,6 +20,7 @@ test("session changes abort requests and clear every role-scoped dataset", async
     "setTrends(null)",
     "setEquipment(null)",
     "setDashboardEquipment(null)",
+    "setEquipmentCategories(null)",
     "setReservations(null)",
     "setScheduleReservations(null)",
     "setWorkorders(null)",
