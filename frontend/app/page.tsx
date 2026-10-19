@@ -5,7 +5,7 @@ import { ActionModals } from "./components/ActionModals";
 import { AppHeader, WorkspaceHeader } from "./components/AppHeader";
 import { LoginView } from "./components/LoginView";
 import { Toast } from "./components/ui";
-import { AuditView } from "./components/views/AuditView";
+import { type AuditFilter, AuditView, emptyAuditFilter } from "./components/views/AuditView";
 import { DashboardView } from "./components/views/DashboardView";
 import { EquipmentView } from "./components/views/EquipmentView";
 import { ReservationsView } from "./components/views/ReservationsView";
@@ -81,7 +81,11 @@ export default function Home() {
   const [equipmentFilter, setEquipmentFilter] = useState<EquipmentFilter>(emptyEquipmentFilter);
   const [reservationFilter, setReservationFilter] = useState("");
   const [workorderFilter, setWorkorderFilter] = useState("");
+  const [auditFilter, setAuditFilter] = useState<AuditFilter>(emptyAuditFilter);
   const appliedEquipmentFilter = useRef(equipmentFilter);
+  // Paging keeps the filter that was last applied, not edits that have not been searched yet.
+  const appliedAuditQuery = useRef({ filter: emptyAuditFilter, page: 0 });
+  const auditRequestSequence = useRef(0);
   const equipmentRequestSequence = useRef(0);
   const trendsRequestSequence = useRef(0);
   const [equipmentForm, setEquipmentForm] = useState<EquipmentForm>(emptyEquipmentForm);
@@ -109,6 +113,8 @@ export default function Home() {
     activeSessionRequests.current.clear();
     equipmentRequestSequence.current += 1;
     appliedEquipmentFilter.current = emptyEquipmentFilter;
+    auditRequestSequence.current += 1;
+    appliedAuditQuery.current = { filter: emptyAuditFilter, page: 0 };
     setStats(null);
     setTrends(null);
     setEquipment(null);
@@ -125,6 +131,7 @@ export default function Home() {
     setEquipmentFilter(emptyEquipmentFilter);
     setReservationFilter("");
     setWorkorderFilter("");
+    setAuditFilter(emptyAuditFilter);
     setEquipmentForm(emptyEquipmentForm);
     setReservationForm(emptyReservationForm);
     setWorkorderForm(emptyWorkorderForm);
@@ -218,8 +225,14 @@ export default function Home() {
         if (isCurrentSessionRequest()) setWorkorders(workorderData);
         await applyLookup(lookup, setDashboardEquipment);
       } else if (target === "audit") {
-        const auditData = await api<PageData<AuditLog>>("/api/audit-logs?size=40&sort=createdAt,desc", token, { signal: controller.signal });
-        if (isCurrentSessionRequest()) setAuditLogs(auditData);
+        const requestSequence = ++auditRequestSequence.current;
+        const { filter, page } = appliedAuditQuery.current;
+        const query = new URLSearchParams({ page: String(page), size: "20", sort: "createdAt,desc" });
+        if (filter.actorRole) query.set("actorRole", filter.actorRole);
+        if (filter.action) query.set("action", filter.action);
+        const auditData = await api<PageData<AuditLog>>(`/api/audit-logs?${query}`, token, { signal: controller.signal });
+        // A slower response for an earlier page or filter must not overwrite the latest one.
+        if (isCurrentSessionRequest() && requestSequence === auditRequestSequence.current) setAuditLogs(auditData);
       }
     } catch (error) {
       if (isCurrentSessionRequest()) {
@@ -397,6 +410,22 @@ export default function Home() {
     void load("equipment");
   }
 
+  function applyAuditFilter() {
+    appliedAuditQuery.current = { filter: auditFilter, page: 0 };
+    void load("audit");
+  }
+
+  function resetAuditFilter() {
+    setAuditFilter(emptyAuditFilter);
+    appliedAuditQuery.current = { filter: emptyAuditFilter, page: 0 };
+    void load("audit");
+  }
+
+  function goToAuditPage(page: number) {
+    appliedAuditQuery.current = { ...appliedAuditQuery.current, page };
+    void load("audit");
+  }
+
   // Row actions open the usual modals with the device already chosen.
   function reserveEquipment(item: Equipment) {
     setReservationForm({ ...emptyReservationForm, equipmentId: String(item.id) });
@@ -413,14 +442,14 @@ export default function Home() {
   return <main className="app-shell">
     <AppHeader user={user} view={activeView} onViewChange={setView} onLogout={logout} />
     <section className="workspace">
-      {/* The dashboard hero carries its own title and refresh action. */}
-      {activeView !== "dashboard" && <WorkspaceHeader user={user} view={activeView} onRefresh={() => void load(activeView)} />}
+      {/* The dashboard and audit heroes carry their own titles. */}
+      {activeView !== "dashboard" && activeView !== "audit" && <WorkspaceHeader user={user} view={activeView} onRefresh={() => void load(activeView)} />}
       {pageLoading && <div className="loading-bar"><span></span></div>}
       {activeView === "dashboard" && <DashboardView user={user} stats={stats} trends={trends} reservations={reservations} workorders={workorders} equipment={dashboardEquipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
       {activeView === "equipment" && <EquipmentView equipment={equipment} categories={equipmentCategories} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
       {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
       {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} equipment={dashboardEquipment} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
-      {activeView === "audit" && <AuditView auditLogs={auditLogs} />}
+      {activeView === "audit" && <AuditView auditLogs={auditLogs} filter={auditFilter} onFilterChange={setAuditFilter} onSearch={applyAuditFilter} onReset={resetAuditFilter} onPage={goToAuditPage} />}
     </section>
     <ActionModals modal={modal} busy={busy} equipment={equipment} equipmentForm={equipmentForm} reservationForm={reservationForm} workorderForm={workorderForm} onClose={() => setModal(null)} onEquipmentChange={setEquipmentForm} onReservationChange={setReservationForm} onWorkorderChange={setWorkorderForm} onSubmitEquipment={submitEquipment} onSubmitReservation={submitReservation} onSubmitWorkorder={submitWorkorder} />
     <Toast toast={toast} />
