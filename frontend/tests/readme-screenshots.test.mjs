@@ -29,7 +29,9 @@ function hooks(selector) {
   ];
 }
 
-test("every selector the screenshot run waits on still exists in the app", () => {
+// Full login selectors (including autocomplete values) are checked against the rendered
+// login form in rendered-html.test.mjs; this scan only checks class/data-attribute hooks.
+test("screenshot selector class and data-attribute hooks still exist in the app", () => {
   const code = sources(appDirectory).join("\n");
   const selectors = [
     ...Object.values(LOGIN),
