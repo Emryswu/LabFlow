@@ -29,13 +29,15 @@ export function WorkOrdersView({ user, workorders, equipment, technicians, filte
     ?? technicians.find((item) => item.id === id)?.displayName
     ?? (id ? `维修员 #${id}` : "待分派");
   const isOwn = (item: WorkOrder) => item.assigneeId === user.id;
-  const canActOn = (item: WorkOrder) => canAssign || (canProcess && isOwn(item));
+  const canActOn = (item: WorkOrder) => canAssign || (item.category === "FAULT" && canProcess && isOwn(item));
 
   /** The one forward step for this row, shown as the solid button; everything else goes in the menu. */
   const primaryStep = (item: WorkOrder): { key: string; label: string; onClick: () => void } | null => {
-    if (canClaim && item.status === "SUBMITTED") return { key: "claim", label: "接单", onClick: () => onClaim(item) };
+    if (item.category === "FAULT" && canClaim && item.status === "SUBMITTED") return { key: "claim", label: "接单", onClick: () => onClaim(item) };
     if (!canActOn(item)) return null;
-    if (item.status === "ASSIGNED") return { key: "start", label: "开始处理", onClick: () => onTransition(item, "IN_PROGRESS") };
+    if ((item.category === "FAULT" && item.status === "ASSIGNED") || (item.category === "PAYMENT_DISCREPANCY" && item.status === "SUBMITTED")) {
+      return { key: "start", label: "开始处理", onClick: () => onTransition(item, "IN_PROGRESS") };
+    }
     if (item.status === "IN_PROGRESS") return { key: "resolve", label: "标记解决", onClick: () => onTransition(item, "RESOLVED") };
     if (item.status === "RESOLVED") return { key: "close", label: "关闭", onClick: () => onTransition(item, "CLOSED") };
     return null;
@@ -60,7 +62,7 @@ export function WorkOrdersView({ user, workorders, equipment, technicians, filte
         <h3>{canAssign ? "工单队列" : "维修工单"}</h3>
         <small>
           {canAssign
-            ? "管理员可派给任意维修员；维修员可主动接单"
+            ? "管理员可派给任意维修员；维修员可主动接单；差账单由管理员直接处理"
             : "可接未分配工单，并处理分配给你的工单"}
           · 共 {workorders?.totalElements ?? 0} 条
         </small>
@@ -72,7 +74,7 @@ export function WorkOrdersView({ user, workorders, equipment, technicians, filte
           const primary = primaryStep(item);
           const menu = menuEntries(
             canActOn(item) && item.status === "RESOLVED" && { key: "reopen", label: "重新打开", onClick: () => onTransition(item, "IN_PROGRESS") },
-            canAssign && (item.status === "SUBMITTED" || item.status === "ASSIGNED")
+            canAssign && (item.status === "SUBMITTED" || (item.category === "FAULT" ? item.status === "ASSIGNED" : item.status === "IN_PROGRESS"))
               && { key: "cancel", label: "取消工单", danger: true, onClick: () => onTransition(item, "CANCELLED") },
           );
           return <tr key={item.id} data-workorder-id={item.id}>
@@ -81,11 +83,11 @@ export function WorkOrdersView({ user, workorders, equipment, technicians, filte
               <small>{item.reporterName} · {item.description}</small>
             </div></td>
             <td><EquipmentCell equipment={equipmentById.get(item.equipmentId)} equipmentId={item.equipmentId} /></td>
-            <td className={item.assigneeId ? "" : "muted"}>{technicianName(item.assigneeId)}</td>
-            <td><StateBadge status={item.status} /></td>
+            <td className={item.assigneeId ? "" : "muted"}>{item.category === "PAYMENT_DISCREPANCY" ? "管理员处理" : technicianName(item.assigneeId)}</td>
+            <td><StateBadge status={item.status} label={item.category === "PAYMENT_DISCREPANCY" && item.status === "SUBMITTED" ? "待处理" : undefined} /></td>
             <td className="nowrap">{formatDate(item.updatedAt)}</td>
             <td><div className="list-actions">
-              {canAssign && item.status === "SUBMITTED" && <div className="assign-control">
+              {canAssign && item.category === "FAULT" && item.status === "SUBMITTED" && <div className="assign-control">
                 <select aria-label={`为工单 ${item.id} 选择维修员`} value={selected} onChange={(e) => setSelectedAssignees({ ...selectedAssignees, [item.id]: e.target.value })}>
                   {technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.displayName}</option>)}
                 </select>

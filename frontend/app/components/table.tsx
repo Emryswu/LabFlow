@@ -25,8 +25,8 @@ export const STATE_TONES: Record<string, StateTone> = {
   SUBMITTED: "warn", ASSIGNED: "info", IN_PROGRESS: "info", RESOLVED: "ok", CLOSED: "idle",
 };
 
-export function StateBadge({ status }: { status: string }) {
-  return <span className={`state state-${STATE_TONES[status] ?? "idle"}`}><i />{statusLabels[status] ?? status}</span>;
+export function StateBadge({ status, label = statusLabels[status] ?? status }: { status: string; label?: string }) {
+  return <span className={`state state-${STATE_TONES[status] ?? "idle"}`}><i />{label}</span>;
 }
 
 export function CategoryTag({ category }: { category: string }) {

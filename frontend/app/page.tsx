@@ -247,8 +247,8 @@ export default function Home() {
   }, [accessToken, reservationFilter, workorderFilter, notify, loadTrends]);
 
   // Keep React accessToken in sync when api() silently refreshes the HttpOnly-cookie session.
-  // This is the single place that reacts to a session change, so every path that ends a
-  // session (explicit logout, failed refresh, a different user signing in) clears the same state.
+  // This is the single place that resets user-scoped state on logout or a principal change.
+  // Refresh only clears the session on 204 (no refresh cookie) or 401 (invalid token).
   useEffect(() => {
     return subscribeSession((session) => {
       if (!session) {

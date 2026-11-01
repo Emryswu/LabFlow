@@ -194,6 +194,72 @@ test("a network error during refresh does not clear an existing session", async 
   }
 });
 
+for (const status of [400, 403, 429, 500, 502, 503, 504, 204, 401]) {
+  test(`refresh HTTP ${status} only ends the session when authentication is absent or invalid`, async () => {
+    const api = await loadAuthModule();
+    const events = [];
+    const originalFetch = globalThis.fetch;
+    api.subscribeSession((session) => events.push(session?.accessToken ?? null));
+    const session = {
+      accessToken: "keep-me", expiresIn: 900,
+      user: { id: 1, username: "student", displayName: "Student", role: "STUDENT" },
+    };
+    api.setAuthSession(session);
+    globalThis.fetch = async () => new Response(null, { status });
+    try {
+      assert.equal(await api.refreshSession(), null);
+      const invalid = status === 204 || status === 401;
+      assert.deepEqual(events, invalid ? ["keep-me", null] : ["keep-me"]);
+      if (!invalid) {
+        globalThis.fetch = async () => Response.json({ ...session, accessToken: "recovered" });
+        assert.equal((await api.refreshSession())?.accessToken, "recovered");
+        assert.deepEqual(events, ["keep-me", "recovered"]);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+}
+
+test("an API 401 followed by a BFF 502 reports failure without logging out and recovers on retry", async () => {
+  const api = await loadAuthModule();
+  const proxy = await loadProxyModule();
+  const originalFetch = globalThis.fetch;
+  const events = [];
+  const session = {
+    accessToken: "old-token", expiresIn: 900,
+    user: { id: 1, username: "student", displayName: "Student", role: "STUDENT" },
+  };
+  api.subscribeSession((value) => events.push(value?.accessToken ?? null));
+  api.setAuthSession(session);
+  let available = false;
+  globalThis.fetch = async (url, init) => {
+    if (url instanceof URL) {
+      if (!available) throw new TypeError("backend down");
+      return Response.json({ ...session, accessToken: "new-token" });
+    }
+    if (url.endsWith("/auth/refresh")) {
+      const response = await proxy.POST(new Request(`http://localhost${url}`, init), {
+        params: Promise.resolve({ path: ["api", "auth", "refresh"] }),
+      });
+      assert.equal(response.status, available ? 200 : 502);
+      return response;
+    }
+    return init.headers.get("Authorization") === "Bearer new-token"
+      ? Response.json({ ok: true })
+      : Response.json({ message: "access token expired" }, { status: 401 });
+  };
+  try {
+    await assert.rejects(api.api("/api/equipment", "old-token"), /access token expired/);
+    assert.deepEqual(events, ["old-token"]);
+    available = true;
+    assert.deepEqual(await api.api("/api/equipment", "old-token"), { ok: true });
+    assert.deepEqual(events, ["old-token", "new-token"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("logout waits for an already-started refresh before clearing the cookie", async () => {
   const api = await loadAuthModule();
   const refreshResponse = deferred();
