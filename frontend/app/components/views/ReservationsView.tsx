@@ -83,18 +83,20 @@ function ReservationSchedule({ schedule, equipment, now }: { schedule: Reservati
   </section>;
 }
 
-export function ReservationsView({ user, reservations, scheduleReservations, equipment, filter, canApprove, onFilterChange, onLoad, onCreate, onDecide, onCancel, onComplete }: {
+export function ReservationsView({ user, reservations, scheduleReservations, equipment, filter, canApprove, busy, onFilterChange, onLoad, onCreate, onDecide, onPay, onCancel, onComplete }: {
   user: UserProfile;
   reservations: PageData<Reservation> | null;
   scheduleReservations: Reservation[] | null;
   equipment: PageData<Equipment> | null;
   filter: string;
   canApprove: boolean;
+  busy: boolean;
   onFilterChange: (filter: string) => void;
   onLoad: () => void;
   onCreate: () => void;
   onDecide: (id: number, decision: "APPROVED" | "REJECTED") => void;
-  onCancel: (id: number) => void;
+  onPay: (id: number) => void;
+  onCancel: (reservation: Reservation) => void;
   onComplete: (id: number) => void;
 }) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
@@ -104,6 +106,7 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
     <section className="toolbar">
       <select value={filter} onChange={(e) => onFilterChange(e.target.value)}>
         <option value="">全部状态</option><option value="PENDING">待审批</option><option value="APPROVED">已批准</option>
+        <option value="AWAITING_PAYMENT">待支付</option><option value="PAID">已支付</option><option value="REFUNDING">退款中</option>
         <option value="COMPLETED">已完成</option><option value="CANCELLED">已取消</option><option value="EXPIRED">已过期</option>
       </select>
       <button className="secondary" onClick={onLoad}>筛选</button>
@@ -118,8 +121,8 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
         <tbody>{reservations?.content.map((item) => {
           const conflict = conflictSummary(item);
           const menu = menuEntries(
-            item.requesterId === user.id && ["PENDING", "APPROVED"].includes(item.status)
-              && { key: "cancel", label: "取消预约", danger: true, onClick: () => onCancel(item.id) },
+            item.requesterId === user.id && ["PENDING", "APPROVED", "AWAITING_PAYMENT", "PAID"].includes(item.status)
+              && { key: "cancel", label: "取消预约", danger: true, onClick: () => onCancel(item) },
           );
           return <tr key={item.id} data-reservation-id={item.id}>
             <td><EquipmentCell equipment={equipmentById.get(item.equipmentId)} equipmentId={item.equipmentId} /></td>
@@ -127,9 +130,13 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
             <td className="nowrap"><b>{formatDate(item.startTime)}</b><small className="block">至 {formatDate(item.endTime)}</small></td>
             <td>
               <StateBadge status={item.status} />
+              {item.status === "AWAITING_PAYMENT" && item.paymentDeadline
+                && <small className="block">支付截止 {formatDate(item.paymentDeadline)}</small>}
               {conflict && <small className="conflict-note" title={conflict.detail}><Icon name="alert" size={13} />{conflict.text}</small>}
             </td>
             <td><div className="list-actions">
+              {item.requesterId === user.id && item.status === "AWAITING_PAYMENT"
+                && <button type="button" className="solid-button" data-action="pay" disabled={busy} onClick={() => onPay(item.id)}>付款</button>}
               {canApprove && item.status === "PENDING" && <>
                 <button
                   type="button"

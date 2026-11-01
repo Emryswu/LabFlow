@@ -35,7 +35,7 @@ test("screenshot selector class and data-attribute hooks still exist in the app"
   const code = sources(appDirectory).join("\n");
   const selectors = [
     ...Object.values(LOGIN),
-    ...SESSIONS.flatMap((session) => session.shots.flatMap((shot) => [shot.ready, shot.nav && `[data-nav="${shot.nav}"]`])),
+    ...SESSIONS.flatMap((session) => session.shots.flatMap((shot) => [shot.ready, shot.capture, shot.nav && `[data-nav="${shot.nav}"]`])),
   ].filter(Boolean);
   const missing = [];
   for (const selector of selectors) {

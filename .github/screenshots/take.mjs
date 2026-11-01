@@ -2,6 +2,7 @@
 // Usage: node take.mjs <output dir> <frontend url>; playwright is installed by the workflow.
 import { chromium } from "playwright";
 import { LOGIN, SESSIONS } from "./shots.mjs";
+import { prepareChargedReservations } from "./charged-reservations.mjs";
 
 const [out, base = "http://127.0.0.1:13000/"] = process.argv.slice(2);
 const browser = await chromium.launch();
@@ -23,13 +24,15 @@ for (const session of SESSIONS) {
       await page.waitForSelector(LOGIN.signedIn, { timeout: 60000 });
     }
     for (const shot of session.shots) {
+      if (shot.prepare === "charged-reservations") await prepareChargedReservations(page, base);
       if (shot.nav) await page.click(`[data-nav="${shot.nav}"]`);
       await page.waitForSelector(shot.ready, { timeout: 60000 });
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(1200);
       // Park the pointer in a corner so no hover state ends up in the picture.
       await page.mouse.move(2, 898);
-      await page.screenshot({ path: `${out}/${shot.file}`, fullPage: shot.fullPage ?? true });
+      if (shot.capture) await page.locator(shot.capture).screenshot({ path: `${out}/${shot.file}` });
+      else await page.screenshot({ path: `${out}/${shot.file}`, fullPage: shot.fullPage ?? true });
       console.log("saved", shot.file);
     }
   } catch (error) {

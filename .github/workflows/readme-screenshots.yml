@@ -21,7 +21,7 @@ concurrency:
 jobs:
   shots:
     name: 起栈并截图
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       TZ: Asia/Shanghai
     steps:

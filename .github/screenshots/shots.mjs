@@ -23,6 +23,12 @@ export const SESSIONS = [
     ],
   },
   { user: "teacher", password: "teacher123", shots: [{ file: "04-reservations.png", nav: "reservations", ready: ".week-block" }] },
-  { user: "student", password: "student123", shots: [{ file: "07-dashboard-student.png", ready: ".row-item" }] },
+  {
+    user: "student", password: "student123",
+    shots: [
+      { file: "07-dashboard-student.png", ready: ".row-item" },
+      { file: "09-reservations-payment.png", prepare: "charged-reservations", ready: '[data-action="confirm-refund"]', fullPage: false },
+    ],
+  },
   { user: "technician", password: "tech123", shots: [{ file: "08-workorders-technician.png", nav: "workorders", ready: "[data-workorder-id]" }] },
 ];

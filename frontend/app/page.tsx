@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { ActionModals } from "./components/ActionModals";
 import { AppHeader, WorkspaceHeader } from "./components/AppHeader";
 import { LoginView } from "./components/LoginView";
-import { Toast } from "./components/ui";
+import { Modal, Toast } from "./components/ui";
 import { type AuditFilter, AuditView, emptyAuditFilter } from "./components/views/AuditView";
 import { DashboardView } from "./components/views/DashboardView";
 import { EquipmentView } from "./components/views/EquipmentView";
@@ -12,7 +12,7 @@ import { ReservationsView } from "./components/views/ReservationsView";
 import { WorkOrdersView } from "./components/views/WorkOrdersView";
 import { api, clearAuthSession, clearLegacyAuthStorage, loginRequest, logoutRequest, refreshSession, setAuthSession, subscribeSession } from "./lib/api";
 import { isViewAllowed } from "./lib/roles";
-import type { AuditLog, Equipment, EquipmentFilter, EquipmentForm, ModalKind, PageData, Reservation, ReservationForm, Stats, Technician, ToastState, Trends, UserProfile, View, WorkOrder, WorkOrderForm } from "./lib/types";
+import type { AuditLog, Equipment, EquipmentFilter, EquipmentForm, ModalKind, PageData, PaymentOrder, Reservation, ReservationForm, Stats, Technician, ToastState, Trends, UserProfile, View, WorkOrder, WorkOrderForm } from "./lib/types";
 
 const emptyEquipmentForm: EquipmentForm = { code: "", name: "", category: "", location: "", manufacturer: "", model: "", responsiblePerson: "", purchaseDate: "", description: "" };
 const emptyReservationForm: ReservationForm = { equipmentId: "", purpose: "", startTime: "", endTime: "" };
@@ -78,6 +78,7 @@ export default function Home() {
   const [auditLogs, setAuditLogs] = useState<PageData<AuditLog> | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [modal, setModal] = useState<ModalKind | null>(null);
+  const [orderDialog, setOrderDialog] = useState<{ kind: "pay" | "refund"; order: PaymentOrder } | null>(null);
   const [equipmentFilter, setEquipmentFilter] = useState<EquipmentFilter>(emptyEquipmentFilter);
   const [reservationFilter, setReservationFilter] = useState("");
   const [workorderFilter, setWorkorderFilter] = useState("");
@@ -126,6 +127,7 @@ export default function Home() {
     setAuditLogs(null);
     setTechnicians([]);
     setModal(null);
+    setOrderDialog(null);
     setBusy(false);
     setPageLoading(false);
     setEquipmentFilter(emptyEquipmentFilter);
@@ -326,7 +328,7 @@ export default function Home() {
 
   // Returns whether the mutation succeeded *and* still belongs to the current session,
   // so callers only discard form contents on a real success.
-  async function mutate(path: string, init: RequestInit, success: string): Promise<boolean> {
+  async function mutate<T = unknown>(path: string, init: RequestInit, success: string | ((result: T) => string)): Promise<boolean> {
     const generation = sessionGeneration.current;
     const controller = new AbortController();
     activeSessionRequests.current.add(controller);
@@ -334,9 +336,9 @@ export default function Home() {
       generation === sessionGeneration.current && !controller.signal.aborted;
     setBusy(true);
     try {
-      await api(path, accessToken, { ...init, signal: controller.signal });
+      const result = await api<T>(path, accessToken, { ...init, signal: controller.signal });
       if (!isCurrentSessionRequest()) return false;
-      notify(success);
+      notify(typeof success === "function" ? success(result) : success);
       setModal(null);
       await load(activeView);
       return isCurrentSessionRequest();
@@ -348,6 +350,40 @@ export default function Home() {
     } finally {
       activeSessionRequests.current.delete(controller);
       if (isCurrentSessionRequest()) setBusy(false);
+    }
+  }
+
+  async function openOrder(id: number, kind: "pay" | "refund") {
+    const generation = sessionGeneration.current;
+    const controller = new AbortController();
+    activeSessionRequests.current.add(controller);
+    const isCurrentSessionRequest = () =>
+      generation === sessionGeneration.current && !controller.signal.aborted;
+    setBusy(true);
+    try {
+      // PaymentService.orderNoFor gives each reservation one stable LF + 8-digit order number.
+      const orderNo = `LF${String(id).padStart(8, "0")}`;
+      const order = await api<PaymentOrder>(`/api/payments/orders/${orderNo}`, accessToken, { signal: controller.signal });
+      if (isCurrentSessionRequest()) setOrderDialog({ kind, order });
+    } catch (error) {
+      if (isCurrentSessionRequest()) notify(error instanceof Error ? error.message : "支付订单加载失败", true);
+    } finally {
+      activeSessionRequests.current.delete(controller);
+      if (isCurrentSessionRequest()) setBusy(false);
+    }
+  }
+
+  async function payOrder(order: PaymentOrder) {
+    if (await mutate<PaymentOrder>(`/api/payments/orders/${order.orderNo}/pay`, { method: "POST" },
+      (result) => result.status === "PAID" ? "支付成功" : "支付请求已提交，请刷新查看结果")) {
+      setOrderDialog(null);
+    }
+  }
+
+  async function cancelReservation(id: number) {
+    if (await mutate<Reservation>(`/api/reservations/${id}/cancel`, { method: "PATCH" },
+      (result) => result.status === "REFUNDING" ? "预约已取消，退款处理中" : "预约已取消")) {
+      setOrderDialog(null);
     }
   }
 
@@ -447,11 +483,24 @@ export default function Home() {
       {pageLoading && <div className="loading-bar"><span></span></div>}
       {activeView === "dashboard" && <DashboardView user={user} stats={stats} trends={trends} reservations={reservations} workorders={workorders} equipment={dashboardEquipment} busy={busy} canApprove={canApprove} onViewChange={setView} onOpenCreate={(kind) => void openCreate(kind)} onDecide={(id, decision) => void decideReservation(id, decision)} onRefresh={() => void load("dashboard")} />}
       {activeView === "equipment" && <EquipmentView equipment={equipment} categories={equipmentCategories} filter={equipmentFilter} canManage={canManageEquipment} canReserve={canReserve} onFilterChange={setEquipmentFilter} onLoad={applyEquipmentFilter} onReset={resetEquipmentFilter} onCreate={() => void openCreate("equipment")} onReserve={reserveEquipment} onReport={reportEquipment} onRetire={(item) => void mutate(`/api/equipment/${item.id}/retire`, { method: "PATCH" }, `设备 ${item.code} 已退役`)} onRestore={(item) => void mutate(`/api/equipment/${item.id}/restore`, { method: "PATCH" }, `设备 ${item.code} 已恢复`)} />}
-      {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onCancel={(id) => void mutate(`/api/reservations/${id}/cancel`, { method: "PATCH" }, "预约已取消")} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
+      {activeView === "reservations" && <ReservationsView user={user} reservations={reservations} scheduleReservations={scheduleReservations} equipment={equipment} filter={reservationFilter} canApprove={canApprove} busy={busy} onFilterChange={setReservationFilter} onLoad={() => void load("reservations")} onCreate={() => void openCreate("reservation")} onDecide={(id, decision) => void decideReservation(id, decision)} onPay={(id) => void openOrder(id, "pay")} onCancel={(item) => item.status === "PAID" ? void openOrder(item.id, "refund") : void cancelReservation(item.id)} onComplete={(id) => void mutate(`/api/reservations/${id}/complete`, { method: "PATCH" }, "预约已完成")} />}
       {activeView === "workorders" && user && <WorkOrdersView user={user} workorders={workorders} equipment={dashboardEquipment} technicians={technicians} filter={workorderFilter} canAssign={canAssignWorkOrders} canClaim={canClaimWorkOrders} canProcess={canProcessWorkOrders} onFilterChange={setWorkorderFilter} onLoad={() => void load("workorders")} onCreate={() => void openCreate("workorder")} onTransition={(item, target, assigneeId) => void transitionWorkorder(item, target, assigneeId)} onClaim={(item) => void claimWorkorder(item)} />}
       {activeView === "audit" && <AuditView auditLogs={auditLogs} filter={auditFilter} onFilterChange={setAuditFilter} onSearch={applyAuditFilter} onReset={resetAuditFilter} onPage={goToAuditPage} />}
     </section>
     <ActionModals modal={modal} busy={busy} equipment={equipment} equipmentForm={equipmentForm} reservationForm={reservationForm} workorderForm={workorderForm} onClose={() => setModal(null)} onEquipmentChange={setEquipmentForm} onReservationChange={setReservationForm} onWorkorderChange={setWorkorderForm} onSubmitEquipment={submitEquipment} onSubmitReservation={submitReservation} onSubmitWorkorder={submitWorkorder} />
+    {orderDialog && <Modal title={orderDialog.kind === "pay" ? "预约付款" : "取消已支付预约"} subtitle={`预约 #${orderDialog.order.reservationId} · 订单 ${orderDialog.order.orderNo}`} onClose={() => { if (!busy) setOrderDialog(null); }}>
+      <div className="modal-form">
+        {orderDialog.kind === "pay"
+          ? <p>应付金额：¥{(orderDialog.order.amountCents / 100).toFixed(2)}</p>
+          : <p>确认取消此预约？取消后将全额退款 ¥{((orderDialog.order.paidCents - orderDialog.order.refundedCents) / 100).toFixed(2)}，退款到账后预约显示为已取消。</p>}
+        <footer>
+          <button type="button" className="secondary" disabled={busy} onClick={() => setOrderDialog(null)}>{orderDialog.kind === "pay" ? "返回" : "暂不取消"}</button>
+          {orderDialog.kind === "pay"
+            ? <button type="button" className="primary" data-action="confirm-pay" disabled={busy || orderDialog.order.status !== "AWAITING_PAYMENT"} onClick={() => void payOrder(orderDialog.order)}>{busy ? "提交中…" : "确认付款"}</button>
+            : <button type="button" className="primary" data-action="confirm-refund" disabled={busy} onClick={() => void cancelReservation(orderDialog.order.reservationId)}>{busy ? "提交中…" : "确认取消并退款"}</button>}
+        </footer>
+      </div>
+    </Modal>}
     <Toast toast={toast} />
   </main>;
 }
