@@ -210,8 +210,10 @@ public class PaymentCallbackService {
                     "支付成功 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
         } else {
             order.applyRefund(request.amountCents());
-            if (reservation.getStatus() == ReservationStatus.REFUNDING && order.refundableCents() <= 0) {
-                reservation.completeRefund();
+            // The entity owns cancellation eligibility. Pass processing time rather
+            // than occurredAt; all three rows are already locked.
+            if (order.getStatus() == PaymentOrderStatus.REFUNDED) {
+                reservation.cancelOnFullRefundIfNotStarted(Instant.now());
             }
             auditLogService.recordSystem("REFUND_SUCCEEDED", "RESERVATION", reservation.getId(),
                     "退款到账 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");

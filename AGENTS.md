@@ -61,6 +61,7 @@ CI（`ci.yml`）对每个指向 main 的 PR 跑以下全部检查。
 
 ## 后端约定
 
+- 时间相关判断写成实体方法并显式传入 `now`，参照 `closeIfPaymentWindowElapsed(now)` / `expireIfPending(now)`；测试直接传入时间，不 mock 静态时间，不为测试修改 `pom.xml` 依赖。
 - 数据库结构变更只加新的 Flyway 迁移，版本号接着最大的往下排，不改已经合入的迁移。
 - 新增带截止时间的预约状态或 `ReservationDeadlineKind` 时，必须同时覆盖延迟消息和数据库补偿扫描两条路径；`ReservationDeadlineCompensationIntegrationTest` 遍历全部截止类型，断言消息投递失败且截止时间已过后，一次扫描即可完成超时处理。新增类型必须补齐测试中的状态与截止时间数据，不能过滤枚举值或跳过用例。
 - 状态变更涉及设备和预约两张表时，加锁顺序固定为 Equipment → Reservation，批量锁按主键排序，避免 ABBA 死锁。细节见 `docs/concurrency-notes.md`。
