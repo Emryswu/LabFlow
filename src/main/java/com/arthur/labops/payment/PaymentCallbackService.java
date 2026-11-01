@@ -210,11 +210,13 @@ public class PaymentCallbackService {
                     "支付成功 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
         } else {
             order.applyRefund(request.amountCents());
-            // A full channel-side refund also cancels a still-paid reservation;
-            // partial refunds keep its slot. All three rows are already locked.
+            // Full refunds cancel PAID only before its start, using callback processing
+            // time rather than occurredAt. Keep usage history once started; REFUNDING
+            // still closes at any time. All three rows are already locked.
             if (order.getStatus() == PaymentOrderStatus.REFUNDED
-                    && (reservation.getStatus() == ReservationStatus.PAID
-                        || reservation.getStatus() == ReservationStatus.REFUNDING)) {
+                    && (reservation.getStatus() == ReservationStatus.REFUNDING
+                        || (reservation.getStatus() == ReservationStatus.PAID
+                            && Instant.now().isBefore(reservation.getStartTime())))) {
                 reservation.completeRefund();
             }
             auditLogService.recordSystem("REFUND_SUCCEEDED", "RESERVATION", reservation.getId(),

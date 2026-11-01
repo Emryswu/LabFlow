@@ -132,7 +132,10 @@ public class Reservation {
         paymentDeadline = null;
     }
 
-    /** Full refund landed: close REFUNDING, or cancel PAID and release its slot. */
+    /**
+     * Close after a full refund. In callbacks, PAID is eligible only before its
+     * start; REFUNDING is eligible at any time. Explicit cancellations also use this.
+     */
     public void completeRefund() {
         status = ReservationStatus.CANCELLED;
     }
