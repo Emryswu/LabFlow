@@ -113,10 +113,10 @@ public class PaymentDispatchService {
      * row, so holding it here would make the call wait on itself. The completion
      * write takes the lock afterwards, in its own short transaction.
      */
-    public PaymentRequest attempt(String idempotencyKey) {
+    public void attempt(String idempotencyKey) {
         PaymentRequest request = requestRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
         if (request == null || request.isSettled()) {
-            return null;
+            return;
         }
         Applicability applicability = applicability(request);
         if (applicability != Applicability.OWED) {
@@ -127,7 +127,7 @@ public class PaymentDispatchService {
                 ticketService.raiseOutboundHaltedTicket(request,
                         "金额已变化，请求所记金额 " + request.getAmountCents() + " 分不再与订单当前状态相符");
             }
-            return null;
+            return;
         }
 
         String channelKey = request.channelKey();
@@ -138,11 +138,13 @@ public class PaymentDispatchService {
                 channel.charge(request.getOrderNo(), request.getAmountCents(), channelKey);
             }
             stateService.markSent(idempotencyKey, channelKey);
-            return null;
         } catch (RuntimeException exception) {
             log.warn("Outbound payment request failed key={} channelKey={} type={} orderNo={}",
                     idempotencyKey, channelKey, request.getType(), request.getOrderNo(), exception);
-            return stateService.markFailed(idempotencyKey, channelKey, exception.toString());
+            PaymentRequest abandoned = stateService.markFailed(idempotencyKey, channelKey, exception.toString());
+            if (abandoned != null) {
+                ticketService.raiseOutboundFailureTicket(abandoned);
+            }
         }
     }
 }

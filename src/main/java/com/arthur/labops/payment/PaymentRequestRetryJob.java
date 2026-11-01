@@ -44,14 +44,30 @@ public class PaymentRequestRetryJob {
         List<String> due = new ArrayList<>(requestRepository.findDueKeys(Instant.now()));
         for (String key : due) {
             try {
-                PaymentRequest abandoned = dispatchService.attempt(key);
-                if (abandoned != null) {
-                    // Out of retries. A human has to look at real money now, so this
-                    // becomes a ticket rather than another line in a log nobody reads.
-                    ticketService.raiseOutboundFailureTicket(abandoned);
-                }
+                dispatchService.attempt(key);
             } catch (RuntimeException exception) {
                 log.warn("Retrying outbound payment request {} failed", key, exception);
+            }
+        }
+    }
+
+    /**
+     * Backstop for the ticket an exhausted request should already have.
+     *
+     * <p>{@link PaymentDispatchService#attempt} raises it right after ABANDONED
+     * commits, but in a separate transaction: if that write fails, the request is
+     * out of {@link #retryDueRequests()} for good and the stuck money would have
+     * no human on it. Raising is idempotent on the request's discrepancy key, so
+     * racing the dispatch path at worst loses one insert to the unique index.
+     */
+    @Scheduled(fixedDelayString = "${labops.payment.outbound.retry-interval:30s}")
+    public void raiseMissingAbandonedTickets() {
+        for (PaymentRequest abandoned : requestRepository.findAbandonedWithoutTicket()) {
+            try {
+                ticketService.raiseOutboundFailureTicket(abandoned);
+            } catch (RuntimeException exception) {
+                log.warn("Raising missed ticket for abandoned payment request {} failed",
+                        abandoned.getIdempotencyKey(), exception);
             }
         }
     }

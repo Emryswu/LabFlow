@@ -163,7 +163,7 @@ production：`labops.reservation-expiry.mode=rabbit`。
 | `uk_payment_request_idempotency` 唯一索引 | 重复发起在**入队时**就被挡掉，还没碰到渠道 |
 | 渠道认商户幂等键 | 万一还是重复发了，渠道返回原交易而不是新建一笔 |
 | `PaymentRequestRetryJob` 定时补偿 + 指数退避 | 发不出去的请求会一直重试，而不是无声丢失 |
-| 重试耗尽 → 差账工单 | 真钱卡住时交给人，而不是又一行没人看的日志 |
+| 重试耗尽 → 差账工单（`PaymentRequestRetryJob` 补扫漏建的） | 真钱卡住时交给人，而不是又一行没人看的日志；建单失败也不会让请求停在 `ABANDONED` 却没人管 |
 
 > 键必须同时覆盖退款。只给支付加键、然后给退款加重试，等于把「重复扣款」换成「重复退款」。
 
