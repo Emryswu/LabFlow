@@ -72,14 +72,11 @@ public class PaymentService implements ReservationPaymentGateway {
 
     @Override
     @Transactional
-    public void requestFullRefund(Long reservationId) {
-        PaymentOrder order = orderRepository.findByReservationIdForUpdate(reservationId).orElse(null);
-        if (order == null) {
-            return;
-        }
+    public boolean requestFullRefund(Long reservationId) {
+        PaymentOrder order = orderRepository.findByReservationIdForUpdate(reservationId).orElseThrow();
         long refundable = order.refundableCents();
         if (refundable <= 0) {
-            return;
+            return false;
         }
         // Durable and keyed. The channel call happens after this transaction
         // commits, and a failure there is retried rather than lost — a refund that
@@ -90,5 +87,6 @@ public class PaymentService implements ReservationPaymentGateway {
                 PaymentTransactionType.REFUND,
                 refundable,
                 PaymentIdempotency.cancellationRefund(order.getOrderNo()));
+        return true;
     }
 }

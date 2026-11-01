@@ -23,6 +23,8 @@ public interface ReservationPaymentGateway {
     /**
      * Asks the channel to refund everything still held for this reservation.
      * The reservation only reaches CANCELLED when the refund callback lands.
+     *
+     * @return true if a refund is pending, false if the order is already fully refunded
      */
-    void requestFullRefund(Long reservationId);
+    boolean requestFullRefund(Long reservationId);
 }
