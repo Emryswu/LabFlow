@@ -71,4 +71,31 @@ public interface PaymentRequestRepository extends JpaRepository<PaymentRequest, 
             order by request.id
             """)
     List<String> findDueKeys(@Param("now") Instant now);
+
+    /**
+     * ABANDONED requests that never got their outbound ticket.
+     *
+     * <p>The dispatch path commits ABANDONED and only then raises the ticket in a
+     * transaction of its own, so a failure in between leaves a request that the
+     * retry scan no longer selects and nobody is looking at. Matching on the
+     * discrepancy key rather than on a flag keeps this in step with the ticket
+     * service's own dedupe: a request already halted with a ticket for another
+     * reason shares the key and is not picked up again.
+     *
+     * <p>Requests whose order or equipment cannot be resolved are left out — the
+     * ticket service can only audit those, and would do so on every scan.
+     */
+    @Query("""
+            select request from PaymentRequest request
+            where request.status = com.arthur.labops.payment.PaymentRequestStatus.ABANDONED
+              and exists (
+                    select 1 from PaymentOrder paymentOrder, Equipment equipment
+                    where paymentOrder.orderNo = request.orderNo
+                      and equipment.id = paymentOrder.equipmentId)
+              and not exists (
+                    select 1 from FaultWorkOrder ticket
+                    where ticket.discrepancyKey = concat('outbound|', request.idempotencyKey))
+            order by request.id
+            """)
+    List<PaymentRequest> findAbandonedWithoutTicket();
 }
