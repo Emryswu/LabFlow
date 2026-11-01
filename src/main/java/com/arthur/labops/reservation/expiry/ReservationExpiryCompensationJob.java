@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.arthur.labops.equipment.EquipmentStatusService;
+import com.arthur.labops.reservation.ReservationPaymentTimeoutService;
 import com.arthur.labops.reservation.ReservationRepository;
 import com.arthur.labops.reservation.ReservationStatuses;
 
@@ -24,13 +25,16 @@ public class ReservationExpiryCompensationJob {
 
     private final ReservationRepository reservationRepository;
     private final ReservationExpirationService expirationService;
+    private final ReservationPaymentTimeoutService paymentTimeoutService;
     private final EquipmentStatusService equipmentStatusService;
 
     public ReservationExpiryCompensationJob(ReservationRepository reservationRepository,
                                             ReservationExpirationService expirationService,
+                                            ReservationPaymentTimeoutService paymentTimeoutService,
                                             EquipmentStatusService equipmentStatusService) {
         this.reservationRepository = reservationRepository;
         this.expirationService = expirationService;
+        this.paymentTimeoutService = paymentTimeoutService;
         this.equipmentStatusService = equipmentStatusService;
     }
 
@@ -43,6 +47,15 @@ public class ReservationExpiryCompensationJob {
                 expirationService.expireIfPending(reservationId);
             } catch (Exception exception) {
                 log.warn("Failed to expire reservation {}", reservationId, exception);
+            }
+        }
+
+        List<Long> overduePaymentIds = new ArrayList<>(reservationRepository.findOverdueAwaitingPaymentIds(now));
+        for (Long reservationId : overduePaymentIds) {
+            try {
+                paymentTimeoutService.closeIfPaymentWindowElapsed(reservationId);
+            } catch (Exception exception) {
+                log.warn("Failed to close overdue payment for reservation {}", reservationId, exception);
             }
         }
 

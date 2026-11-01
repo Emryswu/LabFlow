@@ -35,6 +35,7 @@ import com.arthur.labops.equipment.EquipmentRepository;
 import com.arthur.labops.equipment.EquipmentStatusService;
 import com.arthur.labops.reservation.Reservation;
 import com.arthur.labops.reservation.ReservationRepository;
+import com.arthur.labops.reservation.ReservationPaymentTimeoutService;
 import com.arthur.labops.reservation.ReservationStatus;
 import com.arthur.labops.reservation.expiry.RabbitExpiryTopologyProperties;
 import com.arthur.labops.reservation.expiry.RabbitReservationExpiryListener;
@@ -83,6 +84,9 @@ class ReservationExpiryConcurrencyTest {
 
     @Autowired
     private ReservationExpirationService expirationService;
+
+    @Autowired
+    private ReservationPaymentTimeoutService paymentTimeoutService;
 
     @Autowired
     private ReservationDeadlineHandler deadlineHandler;
@@ -294,7 +298,7 @@ class ReservationExpiryConcurrencyTest {
                 return expirationService.expireIfPending(reservationId);
             }
         };
-        new ReservationExpiryCompensationJob(reservationRepository, wrapping, equipmentStatusService)
+        new ReservationExpiryCompensationJob(reservationRepository, wrapping, paymentTimeoutService, equipmentStatusService)
                 .expireOverduePendingReservations();
 
         assertThat(reservationRepository.findById(first.getId()).orElseThrow().getStatus())
