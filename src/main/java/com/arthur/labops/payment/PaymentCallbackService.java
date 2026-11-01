@@ -210,7 +210,11 @@ public class PaymentCallbackService {
                     "支付成功 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
         } else {
             order.applyRefund(request.amountCents());
-            if (reservation.getStatus() == ReservationStatus.REFUNDING && order.refundableCents() <= 0) {
+            // A full channel-side refund also cancels a still-paid reservation;
+            // partial refunds keep its slot. All three rows are already locked.
+            if (order.getStatus() == PaymentOrderStatus.REFUNDED
+                    && (reservation.getStatus() == ReservationStatus.PAID
+                        || reservation.getStatus() == ReservationStatus.REFUNDING)) {
                 reservation.completeRefund();
             }
             auditLogService.recordSystem("REFUND_SUCCEEDED", "RESERVATION", reservation.getId(),

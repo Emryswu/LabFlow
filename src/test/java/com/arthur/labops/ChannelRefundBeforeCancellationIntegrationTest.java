@@ -62,6 +62,12 @@ class ChannelRefundBeforeCancellationIntegrationTest {
         Long reservationId = payAndRefund(equipmentId, PRICE_CENTS);
         String orderNo = PaymentService.orderNoFor(reservationId);
 
+        // Preserve coverage for legacy PAID reservations left behind before
+        // full channel refunds began cancelling reservations automatically.
+        var legacy = reservationRepository.findById(reservationId).orElseThrow();
+        legacy.markPaid();
+        reservationRepository.saveAndFlush(legacy);
+
         assertThat(orderRepository.findByOrderNo(orderNo).orElseThrow().getStatus())
                 .isEqualTo(PaymentOrderStatus.REFUNDED);
         cancel(route, equipmentId, reservationId, "CANCELLED");
@@ -114,7 +120,7 @@ class ChannelRefundBeforeCancellationIntegrationTest {
         channel.refund(orderNo, refundCents);
         assertThat(channel.deliverPending()).isEqualTo(1);
         assertThat(reservationRepository.findById(reservationId).orElseThrow().getStatus())
-                .isEqualTo(ReservationStatus.PAID);
+                .isEqualTo(refundCents == PRICE_CENTS ? ReservationStatus.CANCELLED : ReservationStatus.PAID);
         return reservationId;
     }
 

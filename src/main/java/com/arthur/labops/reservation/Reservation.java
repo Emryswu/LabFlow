@@ -132,7 +132,7 @@ public class Reservation {
         paymentDeadline = null;
     }
 
-    /** The refund landed; the reservation is finally closed. */
+    /** Full refund landed: close REFUNDING, or cancel PAID and release its slot. */
     public void completeRefund() {
         status = ReservationStatus.CANCELLED;
     }
