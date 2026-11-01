@@ -210,14 +210,10 @@ public class PaymentCallbackService {
                     "支付成功 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
         } else {
             order.applyRefund(request.amountCents());
-            // Full refunds cancel PAID only before its start, using callback processing
-            // time rather than occurredAt. Keep usage history once started; REFUNDING
-            // still closes at any time. All three rows are already locked.
-            if (order.getStatus() == PaymentOrderStatus.REFUNDED
-                    && (reservation.getStatus() == ReservationStatus.REFUNDING
-                        || (reservation.getStatus() == ReservationStatus.PAID
-                            && Instant.now().isBefore(reservation.getStartTime())))) {
-                reservation.completeRefund();
+            // The entity owns cancellation eligibility. Pass processing time rather
+            // than occurredAt; all three rows are already locked.
+            if (order.getStatus() == PaymentOrderStatus.REFUNDED) {
+                reservation.cancelOnFullRefundIfNotStarted(Instant.now());
             }
             auditLogService.recordSystem("REFUND_SUCCEEDED", "RESERVATION", reservation.getId(),
                     "退款到账 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");

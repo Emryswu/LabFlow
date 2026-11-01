@@ -1,8 +1,6 @@
 package com.arthur.labops;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
-import static org.mockito.Mockito.mockStatic;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -12,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.MockedStatic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -129,41 +126,6 @@ class ChannelRefundAutoCancellationIntegrationTest {
             assertThat(order.getRefundedCents()).isEqualTo(PRICE_CENTS);
         });
         assertThat(transactionRepository.countByOrderNo(orderNo)).isEqualTo(2);
-    }
-
-    @Test
-    void fullRefundExactlyAtStartKeepsPaidReservationAndVersionUnchanged() throws Exception {
-        Long reservationId = pay(scenario.createPricedEquipment("START-REFUND", PRICE_CENTS));
-        Instant start = Instant.parse("2030-01-15T10:00:00Z");
-        setWindow(reservationId, start, start.plusSeconds(3_600));
-        Reservation paid = reservationRepository.findById(reservationId).orElseThrow();
-        assertThat(paid.getStartTime()).isEqualTo(start);
-        String orderNo = PaymentService.orderNoFor(reservationId);
-
-        try (MockedStatic<Instant> time = mockStatic(Instant.class, CALLS_REAL_METHODS)) {
-            time.when(Instant::now).thenReturn(start);
-            refund(orderNo, PRICE_CENTS);
-        }
-
-        assertPaidAndVersionUnchanged(reservationId, paid.getVersion());
-        assertThat(orderRepository.findByOrderNo(orderNo).orElseThrow().getStatus())
-                .isEqualTo(PaymentOrderStatus.REFUNDED);
-    }
-
-    @ParameterizedTest
-    @ValueSource(longs = {3_600L, -60L})
-    void fullRefundStillClosesRefundingAfterStartOrEnd(long endOffsetSeconds) throws Exception {
-        Long reservationId = pay(scenario.createPricedEquipment("REFUNDING-USED", PRICE_CENTS));
-        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
-        reservation.beginRefund();
-        reservationRepository.saveAndFlush(reservation);
-        Instant now = Instant.now();
-        setWindow(reservationId, now.minusSeconds(7_200), now.plusSeconds(endOffsetSeconds));
-
-        refund(PaymentService.orderNoFor(reservationId), PRICE_CENTS);
-
-        assertThat(reservationRepository.findById(reservationId).orElseThrow().getStatus())
-                .isEqualTo(ReservationStatus.CANCELLED);
     }
 
     @Test

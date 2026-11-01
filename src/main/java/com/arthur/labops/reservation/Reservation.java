@@ -133,11 +133,24 @@ public class Reservation {
     }
 
     /**
-     * Close after a full refund. In callbacks, PAID is eligible only before its
-     * start; REFUNDING is eligible at any time. Explicit cancellations also use this.
+     * Close an explicitly cancelled reservation whose order is already fully refunded.
      */
     public void completeRefund() {
         status = ReservationStatus.CANCELLED;
+    }
+
+    /**
+     * Full refund callback: release an unstarted PAID slot, or close REFUNDING at
+     * any time. The caller holds the row lock and confirms the order is fully
+     * refunded; {@code now} is callback processing time, not the channel timestamp.
+     */
+    public boolean cancelOnFullRefundIfNotStarted(Instant now) {
+        if (status == ReservationStatus.REFUNDING
+                || (status == ReservationStatus.PAID && now.isBefore(startTime))) {
+            status = ReservationStatus.CANCELLED;
+            return true;
+        }
+        return false;
     }
 
     /**
