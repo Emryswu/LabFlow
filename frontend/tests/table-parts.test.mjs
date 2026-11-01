@@ -45,7 +45,7 @@ const devices = [
 const technicians = [{ id: 7, username: "tech", displayName: "王师傅" }, { id: 8, username: "tech2", displayName: "李师傅" }];
 const order = (id, status, extra = {}) => ({
   id, equipmentId: 1, reporterId: 3, reporterName: "林知夏", title: `故障 ${id}`, description: "无法开机",
-  priority: "HIGH", status, assigneeId: null, createdAt: "2026-10-19T09:00:00+08:00", updatedAt: "2026-10-19T10:00:00+08:00", resolvedAt: null, ...extra,
+  category: "FAULT", priority: "HIGH", status, assigneeId: null, createdAt: "2026-10-19T09:00:00+08:00", updatedAt: "2026-10-19T10:00:00+08:00", resolvedAt: null, ...extra,
 });
 const noop = () => {};
 const rowOf = (html, attr, id) => html.match(new RegExp(`<tr ${attr}="${id}">[\\s\\S]*?</tr>`))[0];
@@ -88,10 +88,84 @@ test("work orders show one forward step per row, by role and status", () => {
   assert.ok(rowOf(own, "data-workorder-id", 2).includes(">测试<") && !own.includes("维修员 #7"));
 
   const admin = renderOrders("ADMIN", orders);
+  assert.ok(rowOf(admin, "data-workorder-id", 1).includes('class="state state-warn"><i></i>待派单</span>'));
   assert.ok(rowOf(admin, "data-workorder-id", 1).includes('data-action="assign"') && rowOf(admin, "data-workorder-id", 1).includes("王师傅"));
   assert.ok(!rowOf(admin, "data-workorder-id", 1).includes('data-action="claim"'));
   assert.ok(rowOf(admin, "data-workorder-id", 5).includes('data-action="start"'), "admins act on any order");
   assert.ok(rowOf(admin, "data-workorder-id", 5).includes('data-action="more"'), "cancel lives in the menu");
+});
+
+test("payment discrepancies offer admin processing without assignment or technician actions", () => {
+  const orders = ["SUBMITTED", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED"].map((status, index) =>
+    order(index + 1, status, { category: "PAYMENT_DISCREPANCY" }));
+  const admin = renderOrders("ADMIN", orders, { technicians: [] });
+  assert.ok(rowOf(admin, "data-workorder-id", 1).includes('class="state state-warn"><i></i>待处理</span>'));
+  assert.ok(admin.includes("差账单由管理员直接处理"));
+  assert.ok(rowOf(admin, "data-workorder-id", 1).includes('data-action="start"'));
+  assert.ok(rowOf(admin, "data-workorder-id", 2).includes('data-action="resolve"'));
+  assert.ok(rowOf(admin, "data-workorder-id", 2).includes('data-action="more"'), "processing discrepancies can be cancelled");
+  assert.ok(rowOf(admin, "data-workorder-id", 3).includes('data-action="close"'));
+  assert.ok(rowOf(admin, "data-workorder-id", 3).includes('data-action="more"'), "resolved discrepancies can be reopened");
+  for (const id of [4, 5]) assert.ok(!rowOf(admin, "data-workorder-id", id).includes("<button"));
+  assert.ok(!admin.includes('data-action="assign"') && !admin.includes("选择维修员"));
+  assert.ok(!rowOf(admin, "data-workorder-id", 1).includes("待分派"));
+  for (const role of ["TECHNICIAN", "TEACHER", "STUDENT"]) {
+    const html = renderOrders(role, orders);
+    for (const item of orders) assert.ok(!rowOf(html, "data-workorder-id", item.id).includes("<button"));
+  }
+});
+
+test("an admin can advance, reopen and cancel discrepancies through the page without an assignee", async (t) => {
+  const { container, root } = mountDom(t);
+  let listener;
+  let status = "SUBMITTED";
+  const transitions = [];
+  const { default: Home } = loadComponent("page.tsx", {
+    subscribeSession: (next) => { listener = next; return noop; },
+    clearLegacyAuthStorage: noop,
+    refreshSession: async () => listener({ accessToken: "t", user: { id: 1, username: "admin", displayName: "管理员", role: "ADMIN" } }),
+    api: async (path, _token, init) => {
+      const url = new URL(path, "http://localhost/");
+      switch (url.pathname) {
+        case "/api/dashboard/stats": return {};
+        case "/api/dashboard/trends": return null;
+        case "/api/equipment": return page(devices);
+        case "/api/users/technicians": return [];
+        case "/api/reservations": return page([]);
+        case "/api/work-orders": return page([order(42, status, { category: "PAYMENT_DISCREPANCY" })]);
+        case "/api/work-orders/42/status": {
+          assert.equal(init.method, "PATCH");
+          const body = JSON.parse(init.body);
+          assert.deepEqual(Object.keys(body), ["targetStatus"]);
+          transitions.push(body.targetStatus);
+          status = body.targetStatus;
+          return {};
+        }
+        default: throw new Error(`Unexpected API request: ${path}`);
+      }
+    },
+  });
+  await act(async () => root.render(React.createElement(Home)));
+  await waitFor(() => container.querySelector('[data-nav="workorders"]'));
+  await act(async () => container.querySelector('[data-nav="workorders"]').click());
+  for (const [action, target, menu] of [
+    ["start", "IN_PROGRESS"], ["resolve", "RESOLVED"], ["reopen", "IN_PROGRESS", true],
+    ["resolve", "RESOLVED"], ["close", "CLOSED"],
+  ]) {
+    await waitFor(() => container.querySelector(`[data-action="${menu ? "more" : action}"]`));
+    if (menu) await act(async () => container.querySelector('[data-action="more"]').click());
+    await act(async () => document.querySelector(`[data-${menu ? "menu" : "action"}="${action}"]`).click());
+    await waitFor(() => container.querySelector('[data-workorder-id="42"] .state')?.textContent === ({ IN_PROGRESS: "处理中", RESOLVED: "已解决", CLOSED: "已关闭" })[target]);
+  }
+  for (const from of ["SUBMITTED", "IN_PROGRESS"]) {
+    status = from;
+    await act(async () => container.querySelector(".toolbar .secondary").click());
+    await waitFor(() => container.querySelector('[data-action="more"]'));
+    await act(async () => container.querySelector('[data-action="more"]').click());
+    await act(async () => document.querySelector('[data-menu="cancel"]').click());
+    await waitFor(() => container.querySelector('[data-workorder-id="42"] .state')?.textContent === "已取消");
+  }
+  assert.deepEqual(transitions, ["IN_PROGRESS", "RESOLVED", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED", "CANCELLED"]);
 });
 
 test("work orders name the device from the lookup and fall back to its id", () => {

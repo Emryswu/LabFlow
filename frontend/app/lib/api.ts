@@ -152,12 +152,14 @@ async function performRefresh(generation: number, signal: AbortSignal): Promise<
         cache: "no-store",
         signal,
       });
-      if (response.status === 204 || !response.ok) {
+      if (response.status === 204 || response.status === 401) {
         if (generation === authGeneration) {
           clearAuthSession();
         }
         return null;
       }
+      // Proxy failures and other HTTP errors do not establish that the session expired.
+      if (!response.ok) return null;
       const session = await response.json() as AuthSession;
       if (generation !== authGeneration) return null;
       setAuthSession(session);
