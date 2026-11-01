@@ -56,11 +56,14 @@ public class ReservationClosureService {
                 return ReservationClosure.CANCELLED;
             }
             case PAID -> {
+                if (!paymentGateway.requestFullRefund(reservation.getId())) {
+                    reservation.completeRefund();
+                    return ReservationClosure.CANCELLED;
+                }
                 // The slot is released now; the reservation stays open until the
                 // refund callback lands, so the books never show a cancelled
                 // reservation whose money is still sitting at the channel.
                 reservation.beginRefund();
-                paymentGateway.requestFullRefund(reservation.getId());
                 return ReservationClosure.REFUND_PENDING;
             }
             default -> {
