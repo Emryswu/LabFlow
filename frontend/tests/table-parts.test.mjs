@@ -130,6 +130,180 @@ async function waitFor(check) {
   assert.fail("Timed out waiting for React and the requested data");
 }
 
+const chargedReservation = (status, extra = {}) => ({
+  id: 42, equipmentId: 1, requesterId: 3, requesterName: "林知夏", purpose: "收费实验", status,
+  startTime: new Date(2026, 10, 2, 10).toISOString(), endTime: new Date(2026, 10, 2, 11).toISOString(),
+  paymentDeadline: new Date(2026, 10, 1, 14).toISOString(), ...extra,
+});
+const paymentOrder = { orderNo: "LF00000042", reservationId: 42, amountCents: 1234, paidCents: 0, refundedCents: 0, status: "AWAITING_PAYMENT" };
+
+test("charged reservation actions and filters follow ownership and lifecycle", () => {
+  const { ReservationsView } = loadComponent("components/views/ReservationsView.tsx");
+  for (const role of ["STUDENT", "TEACHER", "ADMIN"]) {
+    const rows = ["AWAITING_PAYMENT", "PAID", "REFUNDING", "CANCELLED", "EXPIRED", "COMPLETED", "REJECTED"]
+      .map((status, index) => chargedReservation(status, { id: index + 1 }));
+    rows.push(chargedReservation("AWAITING_PAYMENT", { id: 8, requesterId: 9 }));
+    const html = renderToStaticMarkup(React.createElement(ReservationsView, {
+      user: { id: 3, username: "u", displayName: "测试", role }, reservations: page(rows),
+      scheduleReservations: [], equipment: page(devices), filter: "", canApprove: role !== "STUDENT", busy: false,
+      onFilterChange: noop, onLoad: noop, onCreate: noop, onDecide: noop, onPay: noop, onCancel: noop, onComplete: noop,
+    }));
+    assert.ok(rowOf(html, "data-reservation-id", 1).includes('data-action="pay"'), `${role} can pay their own order`);
+    for (const id of [1, 2]) assert.ok(rowOf(html, "data-reservation-id", id).includes('data-action="more"'));
+    for (const id of [3, 4, 5, 6, 7, 8]) assert.ok(!rowOf(html, "data-reservation-id", id).includes("<button"));
+    for (const status of ["AWAITING_PAYMENT", "PAID", "REFUNDING"]) assert.ok(html.includes(`<option value="${status}">`));
+  }
+});
+
+async function mountChargedReservation(t, initialStatus, paymentApi) {
+  const { container, root } = mountDom(t);
+  let listener;
+  let reservation = chargedReservation(initialStatus);
+  const requests = [];
+  const { default: Home } = loadComponent("page.tsx", {
+    subscribeSession: (next) => { listener = next; return noop; }, clearLegacyAuthStorage: noop,
+    refreshSession: async () => listener({ accessToken: "student-token", user: { id: 3, username: "student", displayName: "林知夏", role: "STUDENT" } }),
+    api: async (path, token, init = {}) => {
+      requests.push({ path, token, init });
+      const url = new URL(path, "http://localhost/");
+      switch (url.pathname) {
+        case "/api/dashboard/stats": return {};
+        case "/api/dashboard/trends": return null;
+        case "/api/equipment": return page(devices);
+        case "/api/work-orders": return page([]);
+        case "/api/reservations": return page([reservation]);
+        default: return paymentApi(path, init, (status) => { reservation = { ...reservation, status }; });
+      }
+    },
+  });
+  await act(async () => root.render(React.createElement(Home)));
+  await waitFor(() => container.querySelector('[data-nav="reservations"]'));
+  await act(async () => container.querySelector('[data-nav="reservations"]').click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]'));
+  return { container, requests };
+}
+
+test("the page confirms the order amount, pays, then cancels into refunding until the callback arrives", async (t) => {
+  let finishRefund;
+  let order = paymentOrder;
+  const { container, requests } = await mountChargedReservation(t, "AWAITING_PAYMENT", async (path, init, setStatus) => {
+    if (path === "/api/payments/orders/LF00000042") return order;
+    if (path === "/api/payments/orders/LF00000042/pay") {
+      assert.equal(init.method, "POST");
+      setStatus("PAID");
+      order = { ...paymentOrder, paidCents: 1234, status: "PAID" };
+      return order;
+    }
+    assert.equal(path, "/api/reservations/42/cancel");
+    assert.equal(init.method, "PATCH");
+    setStatus("REFUNDING");
+    finishRefund = () => setStatus("CANCELLED");
+    return chargedReservation("REFUNDING");
+  });
+  await act(async () => container.querySelector('[data-action="pay"]').click());
+  await waitFor(() => container.querySelector('[role="dialog"]'));
+  const dialog = container.querySelector('[role="dialog"]');
+  assert.match(dialog.textContent, /12\.34/);
+  assert.ok(!requests.some(({ path }) => path.endsWith("/pay")), "opening the dialog never charges");
+  await act(async () => dialog.querySelector('[data-action="confirm-pay"]').click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("已支付"));
+  assert.equal(container.querySelector('[role="dialog"]'), null);
+  await act(async () => container.querySelector('[data-action="more"]').click());
+  await act(async () => document.querySelector('[data-menu="cancel"]').click());
+  await waitFor(() => container.querySelector('[data-action="confirm-refund"]'));
+  await act(async () => container.querySelector('[data-action="confirm-refund"]').click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("退款中"));
+  assert.ok(container.querySelector(".toast").textContent.includes("退款处理中"));
+  assert.equal(container.querySelector('[data-action="more"]'), null);
+  finishRefund();
+  await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "筛选").click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("已取消"));
+  assert.ok(requests.every(({ token }) => token === "student-token"));
+});
+
+test("paid cancellation requires confirmation of the full refund amount and dismissing the dialog sends no cancellation", async (t) => {
+  const { container, requests } = await mountChargedReservation(t, "PAID", async (path, init, setStatus) => {
+    if (path === "/api/payments/orders/LF00000042") return { ...paymentOrder, paidCents: 1234, status: "PAID" };
+    assert.equal(path, "/api/reservations/42/cancel");
+    assert.equal(init.method, "PATCH");
+    setStatus("REFUNDING");
+    return chargedReservation("REFUNDING");
+  });
+  const cancellations = () => requests.filter(({ path }) => path.endsWith("/cancel"));
+  const openConfirmation = async () => {
+    await act(async () => container.querySelector('[data-action="more"]').click());
+    await act(async () => document.querySelector('[data-menu="cancel"]').click());
+    assert.equal(cancellations().length, 0, "clicking cancel must not send the cancellation request");
+    await waitFor(() => container.querySelector('[data-action="confirm-refund"]'));
+    const dialog = container.querySelector('[role="dialog"]');
+    assert.match(dialog.textContent, /全额退款.*12\.34/);
+    assert.equal(cancellations().length, 0, "loading and displaying the amount does not cancel");
+    return dialog;
+  };
+  let dialog = await openConfirmation();
+  await act(async () => [...dialog.querySelectorAll("button")].find((button) => button.textContent === "暂不取消").click());
+  assert.equal(container.querySelector('[role="dialog"]'), null);
+  assert.equal(cancellations().length, 0);
+  dialog = await openConfirmation();
+  await act(async () => dialog.querySelector('[aria-label="关闭"]').click());
+  assert.equal(container.querySelector('[role="dialog"]'), null);
+  assert.equal(cancellations().length, 0);
+  dialog = await openConfirmation();
+  await act(async () => dialog.querySelector('[data-action="confirm-refund"]').click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("退款中"));
+  assert.equal(cancellations().length, 1);
+  assert.equal(container.querySelector('[role="dialog"]'), null);
+});
+
+test("an unpaid charged reservation can be cancelled without initiating payment", async (t) => {
+  const { container, requests } = await mountChargedReservation(t, "AWAITING_PAYMENT", async (path, init, setStatus) => {
+    assert.equal(path, "/api/reservations/42/cancel");
+    assert.equal(init.method, "PATCH");
+    setStatus("CANCELLED");
+    return chargedReservation("CANCELLED");
+  });
+  await act(async () => container.querySelector('[data-action="more"]').click());
+  await act(async () => document.querySelector('[data-menu="cancel"]').click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("已取消"));
+  assert.ok(!requests.some(({ path }) => path.startsWith("/api/payments")));
+});
+
+for (const failure of ["lookup", "pay"]) {
+  test(`payment ${failure} errors are visible and never report success`, async (t) => {
+    const { container } = await mountChargedReservation(t, "AWAITING_PAYMENT", async (path) => {
+      if (failure === "pay" && path === "/api/payments/orders/LF00000042") return paymentOrder;
+      throw new Error("支付窗口已过期");
+    });
+    await act(async () => container.querySelector('[data-action="pay"]').click());
+    if (failure === "pay") {
+      await waitFor(() => container.querySelector('[data-action="confirm-pay"]'));
+      await act(async () => container.querySelector('[data-action="confirm-pay"]').click());
+    }
+    await waitFor(() => container.querySelector(".toast.error"));
+    assert.ok(container.querySelector(".toast.error").textContent.includes("支付窗口已过期"));
+    assert.ok(container.querySelector('[data-reservation-id="42"]').textContent.includes("待支付"));
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), failure === "pay");
+  });
+}
+
+test("a delayed payment stays pending and disables another confirmation while the request is in flight", async (t) => {
+  let resolvePay;
+  const { container } = await mountChargedReservation(t, "AWAITING_PAYMENT", async (path) => {
+    if (path === "/api/payments/orders/LF00000042") return paymentOrder;
+    assert.equal(path, "/api/payments/orders/LF00000042/pay");
+    return new Promise((resolve) => { resolvePay = () => resolve(paymentOrder); });
+  });
+  await act(async () => container.querySelector('[data-action="pay"]').click());
+  await waitFor(() => container.querySelector('[data-action="confirm-pay"]'));
+  await act(async () => container.querySelector('[data-action="confirm-pay"]').click());
+  assert.equal(container.querySelector('[data-action="confirm-pay"]').disabled, true);
+  assert.equal(container.querySelector('[data-action="pay"]').disabled, true);
+  await act(async () => resolvePay());
+  await waitFor(() => !container.querySelector('[role="dialog"]'));
+  assert.ok(container.querySelector('[data-reservation-id="42"]').textContent.includes("待支付"));
+  assert.ok(container.querySelector(".toast").textContent.includes("支付请求已提交"));
+});
+
 function mountDom(t) {
   const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/" });
   const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };

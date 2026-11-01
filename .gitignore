@@ -60,6 +60,7 @@ docker-data/
 
 # frontend build and runtime artifacts
 frontend/node_modules/
+.github/screenshots/node_modules/
 frontend/dist/
 frontend/.vinext/
 frontend/.next/
