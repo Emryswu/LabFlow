@@ -463,3 +463,46 @@ for (const failsLaterPage of [false, true]) {
     }
   });
 }
+
+test("student and technician stat cards prefer backend stats over the 12-row slice and count paid states", () => {
+  const { DashboardView } = loadComponent("components/views/DashboardView.tsx");
+  const student = { id: 10, username: "student", displayName: "林知夏", role: "STUDENT" };
+  const technician = { id: 20, username: "technician", displayName: "李工", role: "TECHNICIAN" };
+
+  const studentRows = [
+    { ...reservation, id: 1, status: "AWAITING_PAYMENT" },
+    { ...reservation, id: 2, status: "PAID" },
+    { ...reservation, id: 3, status: "REFUNDING" },
+  ];
+  const fallbackHtml = renderToStaticMarkup(React.createElement(DashboardView, {
+    user: student, stats: null, reservations: page(studentRows), workorders: page([]),
+    equipment: page(equipment), busy: false, canApprove: false,
+    onViewChange() {}, onOpenCreate() {}, onDecide() {}, onRefresh() {},
+  }));
+  assert.ok(fallbackHtml.includes("进行中预约</small><strong>2<em>条</em></strong>"),
+    "Fallback active count must include AWAITING_PAYMENT and PAID without REFUNDING");
+
+  const fullStats = {
+    usersTotal: 5, equipmentTotal: 8, equipmentAvailable: 6, equipmentMaintenance: 1, equipmentInUse: 1, equipmentRetired: 0,
+    reservationsPending: 3, reservationsApproved: 2, reservationsToday: 4, workOrdersOpen: 15, workOrdersUrgent: 2, paymentDiscrepanciesOpen: 0,
+    myReservationsPending: 14, myReservationsActive: 17, myWorkOrdersTotal: 13,
+    workOrdersClaimable: 16, myWorkOrdersInProgress: 13, technicianPriorityWorkOrders: 14,
+  };
+  const studentHtml = renderToStaticMarkup(React.createElement(DashboardView, {
+    user: student, stats: fullStats, reservations: page(studentRows), workorders: page([]),
+    equipment: page(equipment), busy: false, canApprove: false,
+    onViewChange() {}, onOpenCreate() {}, onDecide() {}, onRefresh() {},
+  }));
+  assert.ok(studentHtml.includes("我的待审批</small><strong>14<em>条</em></strong>"));
+  assert.ok(studentHtml.includes("进行中预约</small><strong>17<em>条</em></strong>"));
+  assert.ok(studentHtml.includes("我的报修</small><strong>13<em>条</em></strong>"));
+
+  const techHtml = renderToStaticMarkup(React.createElement(DashboardView, {
+    user: technician, stats: fullStats, reservations: page([]), workorders: page([]),
+    equipment: page(equipment), busy: false, canApprove: false,
+    onViewChange() {}, onOpenCreate() {}, onDecide() {}, onRefresh() {},
+  }));
+  assert.ok(techHtml.includes("待接单池</small><strong>16<em>条</em></strong>"));
+  assert.ok(techHtml.includes("我的处理中</small><strong>13<em>条</em></strong>"));
+  assert.ok(techHtml.includes("紧急/高优</small><strong>14<em>条</em></strong>"));
+});

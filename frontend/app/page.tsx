@@ -291,6 +291,8 @@ export default function Home() {
   const canAssignWorkOrders = user?.role === "ADMIN";
   const canClaimWorkOrders = user?.role === "TECHNICIAN";
   const canProcessWorkOrders = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
+  const refundableCents = orderDialog ? Math.max(0, orderDialog.order.paidCents - orderDialog.order.refundedCents) : 0;
+  const needsRefund = orderDialog?.kind === "refund" && refundableCents > 0 && orderDialog.order.status !== "REFUNDED";
 
   useEffect(() => {
     if (!accessToken || !canAssignWorkOrders) return;
@@ -492,12 +494,14 @@ export default function Home() {
       <div className="modal-form">
         {orderDialog.kind === "pay"
           ? <p>应付金额：¥{(orderDialog.order.amountCents / 100).toFixed(2)}</p>
-          : <p>确认取消此预约？取消后将全额退款 ¥{((orderDialog.order.paidCents - orderDialog.order.refundedCents) / 100).toFixed(2)}，退款到账后预约显示为已取消。</p>}
+          : needsRefund
+            ? <p>确认取消此预约？取消后将全额退款 ¥{(refundableCents / 100).toFixed(2)}，退款到账后预约显示为已取消。</p>
+            : <p>该订单已完成全额退款，无剩余可退金额。确认直接取消此预约？</p>}
         <footer>
           <button type="button" className="secondary" disabled={busy} onClick={() => setOrderDialog(null)}>{orderDialog.kind === "pay" ? "返回" : "暂不取消"}</button>
           {orderDialog.kind === "pay"
             ? <button type="button" className="primary" data-action="confirm-pay" disabled={busy || orderDialog.order.status !== "AWAITING_PAYMENT"} onClick={() => void payOrder(orderDialog.order)}>{busy ? "提交中…" : "确认付款"}</button>
-            : <button type="button" className="primary" data-action="confirm-refund" disabled={busy} onClick={() => void cancelReservation(orderDialog.order.reservationId)}>{busy ? "提交中…" : "确认取消并退款"}</button>}
+            : <button type="button" className="primary" data-action="confirm-refund" disabled={busy} onClick={() => void cancelReservation(orderDialog.order.reservationId)}>{busy ? "提交中…" : (needsRefund ? "确认取消并退款" : "确认取消")}</button>}
         </footer>
       </div>
     </Modal>}

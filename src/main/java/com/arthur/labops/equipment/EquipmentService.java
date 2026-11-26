@@ -1,5 +1,6 @@
 package com.arthur.labops.equipment;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -18,26 +19,37 @@ import com.arthur.labops.reservation.ReservationStatus;
 import com.arthur.labops.reservation.ReservationStatuses;
 import com.arthur.labops.user.CurrentUserService;
 import com.arthur.labops.user.PlatformUser;
+import com.arthur.labops.workorder.FaultWorkOrderRepository;
+import com.arthur.labops.workorder.WorkOrderCategory;
+import com.arthur.labops.workorder.WorkOrderStatus;
 
 @Service
 public class EquipmentService {
 
     /** Unsettled reservations block retirement — including the ones with money in flight. */
     private static final Set<ReservationStatus> OPEN_RESERVATIONS = ReservationStatuses.OPEN;
+    private static final Set<WorkOrderStatus> ACTIVE_FAULT_WORK_ORDERS = EnumSet.of(
+            WorkOrderStatus.SUBMITTED,
+            WorkOrderStatus.ASSIGNED,
+            WorkOrderStatus.IN_PROGRESS,
+            WorkOrderStatus.RESOLVED);
 
     private final EquipmentRepository equipmentRepository;
     private final ReservationRepository reservationRepository;
+    private final FaultWorkOrderRepository workOrderRepository;
     private final CurrentUserService currentUserService;
     private final AuditLogService auditLogService;
     private final EquipmentStatusService equipmentStatusService;
 
     public EquipmentService(EquipmentRepository equipmentRepository,
                             ReservationRepository reservationRepository,
+                            FaultWorkOrderRepository workOrderRepository,
                             CurrentUserService currentUserService,
                             AuditLogService auditLogService,
                             EquipmentStatusService equipmentStatusService) {
         this.equipmentRepository = equipmentRepository;
         this.reservationRepository = reservationRepository;
+        this.workOrderRepository = workOrderRepository;
         this.currentUserService = currentUserService;
         this.auditLogService = auditLogService;
         this.equipmentStatusService = equipmentStatusService;
@@ -107,6 +119,15 @@ public class EquipmentService {
         }
         if (equipment.getStatus() == EquipmentStatus.MAINTENANCE) {
             throw new BusinessException("EQUIPMENT_IN_MAINTENANCE", "维护中的设备不能退役，请先关闭工单", HttpStatus.CONFLICT);
+        }
+        // The actor lookup can establish a MySQL snapshot before the equipment lock is acquired.
+        // Use a locking read to see faults committed by its previous holder.
+        if (workOrderRepository.findFirstByEquipmentIdAndCategoryAndStatusIn(
+                id, WorkOrderCategory.FAULT, ACTIVE_FAULT_WORK_ORDERS).isPresent()) {
+            throw new BusinessException(
+                    "EQUIPMENT_HAS_OPEN_WORK_ORDERS",
+                    "存在未关闭的故障工单，请先取消或关闭工单后再退役",
+                    HttpStatus.CONFLICT);
         }
         List<Reservation> open = reservationRepository.findByEquipmentIdAndStatusInForUpdate(
                 id, OPEN_RESERVATIONS);

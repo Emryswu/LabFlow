@@ -12,6 +12,12 @@ public record DashboardStatsResponse(
         long reservationsToday,
         long workOrdersOpen,
         long workOrdersUrgent,
-        long paymentDiscrepanciesOpen
+        long paymentDiscrepanciesOpen,
+        long myReservationsPending,
+        long myReservationsActive,
+        long myWorkOrdersTotal,
+        long workOrdersClaimable,
+        long myWorkOrdersInProgress,
+        long technicianPriorityWorkOrders
 ) {
 }

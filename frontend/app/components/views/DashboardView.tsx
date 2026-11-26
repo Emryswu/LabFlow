@@ -50,13 +50,14 @@ export function DashboardView({
 
   const myPending = reservationList.filter((item) => item.status === "PENDING");
   const myActiveReservations = reservationList.filter((item) =>
-    item.status === "PENDING" || item.status === "APPROVED");
+    item.status === "PENDING" || item.status === "APPROVED" || item.status === "AWAITING_PAYMENT" || item.status === "PAID");
   const pendingApprovals = reservationList.filter((item) => item.status === "PENDING");
   const upcomingSchedule = [...reservationList]
-    .filter((item) => item.status === "PENDING" || item.status === "APPROVED")
+    .filter((item) => item.status === "PENDING" || item.status === "APPROVED" || item.status === "AWAITING_PAYMENT" || item.status === "PAID")
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 4);
-  const claimPool = workorderList.filter((item) => item.status === "SUBMITTED");
+  const claimPool = workorderList.filter((item) =>
+    item.category === "FAULT" && item.status === "SUBMITTED" && item.equipmentStatus !== "RETIRED");
   const myInProgress = workorderList.filter((item) =>
     item.status === "ASSIGNED" || item.status === "IN_PROGRESS" || item.status === "RESOLVED");
   const urgentOrders = workorderList.filter((item) =>
@@ -102,9 +103,9 @@ export function DashboardView({
 
     <section className="stat-grid" aria-label="角色指标">
       {user.role === "STUDENT" && <>
-        <StatCard icon="calendar" tone="orange" label="我的待审批" value={myPending.length} unit="条" note="跟踪审批进度" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="clock" tone="amber" label="进行中预约" value={myActiveReservations.length} unit="条" note="含待批与已批准" trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="wrench" tone="coral" label="我的报修" value={workorders?.totalElements ?? workorderList.length} unit="条" note="故障进度可查" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="calendar" tone="orange" label="我的待审批" value={stats?.myReservationsPending ?? myPending.length} unit="条" note="跟踪审批进度" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="clock" tone="amber" label="进行中预约" value={stats?.myReservationsActive ?? myActiveReservations.length} unit="条" note="含待批、已批与待付/已付" trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="wrench" tone="coral" label="我的报修" value={stats?.myWorkOrdersTotal ?? workorders?.totalElements ?? workorderList.length} unit="条" note="故障进度可查" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
         <StatCard icon="microscope" tone="green" label="可预约设备" value={stats?.equipmentAvailable ?? 0} unit="台" note={`共 ${stats?.equipmentTotal ?? 0} 台在册`} onOpen={() => onViewChange("equipment")} />
       </>}
       {user.role === "TEACHER" && <>
@@ -114,10 +115,10 @@ export function DashboardView({
         <StatCard icon="wrench" tone="coral" label="故障动态" value={stats?.workOrdersOpen ?? 0} unit="条" note={`紧急 ${stats?.workOrdersUrgent ?? 0} 条`} trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
       </>}
       {user.role === "TECHNICIAN" && <>
-        <StatCard icon="inbox" tone="coral" label="待接单池" value={claimPool.length} unit="条" note="可主动接单" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
-        <StatCard icon="wrench" tone="amber" label="我的处理中" value={myInProgress.length} unit="条" note="派给自己的在办单" trend={trend("workOrdersResolved", "近7天解决")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="inbox" tone="coral" label="待接单池" value={stats?.workOrdersClaimable ?? claimPool.length} unit="条" note="可主动接单" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="wrench" tone="amber" label="我的处理中" value={stats?.myWorkOrdersInProgress ?? myInProgress.length} unit="条" note="派给自己的在办单" trend={trend("workOrdersResolved", "近7天解决")} onOpen={() => onViewChange("workorders")} />
         <StatCard icon="microscope" tone="graphite" label="维护中设备" value={stats?.equipmentMaintenance ?? 0} unit="台" note={`共 ${stats?.equipmentTotal ?? 0} 台在册`} onOpen={() => onViewChange("equipment")} />
-        <StatCard icon="alert" tone="orange" label="紧急/高优" value={urgentOrders.length || (stats?.workOrdersUrgent ?? 0)} unit="条" note="优先恢复可用" onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="alert" tone="orange" label="紧急/高优" value={stats?.technicianPriorityWorkOrders ?? urgentOrders.length} unit="条" note="优先恢复可用" onOpen={() => onViewChange("workorders")} />
       </>}
       {user.role === "ADMIN" && <>
         <StatCard icon="clipboard" tone="graphite" label="设备在册" value={stats?.equipmentTotal ?? 0} unit="台" note={`可预约 ${stats?.equipmentAvailable ?? 0} 台`} onOpen={() => onViewChange("equipment")} />

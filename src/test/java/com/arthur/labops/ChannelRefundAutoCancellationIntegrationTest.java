@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.arthur.labops.audit.OperationLogRepository;
 import com.arthur.labops.payment.PaymentCallbackIngest;
 import com.arthur.labops.payment.PaymentCallbackRequest;
 import com.arthur.labops.payment.PaymentOrderRepository;
@@ -49,6 +50,7 @@ class ChannelRefundAutoCancellationIntegrationTest {
     @Autowired private PaymentOrderRepository orderRepository;
     @Autowired private PaymentRequestRepository requestRepository;
     @Autowired private PaymentTransactionRepository transactionRepository;
+    @Autowired private OperationLogRepository operationLogRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
 
     private PaymentScenario scenario;
@@ -76,6 +78,13 @@ class ChannelRefundAutoCancellationIntegrationTest {
 
         assertThat(reservationRepository.findById(reservationId).orElseThrow().getStatus())
                 .isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(operationLogRepository.findAll())
+                .anySatisfy(log -> {
+                    assertThat(log.getAction()).isEqualTo("RESERVATION_CANCELLED");
+                    assertThat(log.getTargetType()).isEqualTo("RESERVATION");
+                    assertThat(log.getTargetId()).isEqualTo(reservationId);
+                    assertThat(log.getActorRole()).isEqualTo("SYSTEM");
+                });
         assertThat(orderRepository.findByOrderNo(orderNo).orElseThrow()).satisfies(order -> {
             assertThat(order.getStatus()).isEqualTo(PaymentOrderStatus.REFUNDED);
             assertThat(order.getRefundedCents()).isEqualTo(PRICE_CENTS);
@@ -121,6 +130,9 @@ class ChannelRefundAutoCancellationIntegrationTest {
         assertThat(callbackIngest.ingest(request).accepted()).isTrue();
 
         assertPaidAndVersionUnchanged(reservationId, paid.getVersion());
+        assertThat(operationLogRepository.findAll())
+                .noneMatch(log -> "RESERVATION_CANCELLED".equals(log.getAction())
+                        && reservationId.equals(log.getTargetId()));
         assertThat(orderRepository.findByOrderNo(orderNo).orElseThrow()).satisfies(order -> {
             assertThat(order.getStatus()).isEqualTo(PaymentOrderStatus.REFUNDED);
             assertThat(order.getRefundedCents()).isEqualTo(PRICE_CENTS);

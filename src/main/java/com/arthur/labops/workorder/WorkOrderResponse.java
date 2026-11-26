@@ -2,6 +2,8 @@ package com.arthur.labops.workorder;
 
 import java.time.Instant;
 
+import com.arthur.labops.equipment.EquipmentStatus;
+
 public record WorkOrderResponse(
         Long id,
         Long equipmentId,
@@ -15,7 +17,8 @@ public record WorkOrderResponse(
         Instant createdAt,
         Instant updatedAt,
         Instant resolvedAt,
-        WorkOrderCategory category
+        WorkOrderCategory category,
+        EquipmentStatus equipmentStatus
 ) {
     static WorkOrderResponse from(FaultWorkOrder workOrder) {
         return new WorkOrderResponse(
@@ -31,6 +34,7 @@ public record WorkOrderResponse(
                 workOrder.getCreatedAt(),
                 workOrder.getUpdatedAt(),
                 workOrder.getResolvedAt(),
-                workOrder.getCategory());
+                workOrder.getCategory(),
+                workOrder.getEquipment().getStatus());
     }
 }

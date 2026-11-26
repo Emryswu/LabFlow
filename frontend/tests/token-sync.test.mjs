@@ -2,29 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
+import { proxyBackend } from "../server/backend-proxy.ts";
 
 async function authSources() {
   return Promise.all([
     readFile(new URL("../app/lib/api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/backend/[...path]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../server/backend-proxy.ts", import.meta.url), "utf8"),
   ]);
 }
 
 async function loadAuthModule() {
   const source = await readFile(new URL("../app/lib/api.ts", import.meta.url), "utf8");
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText;
-  const encoded = Buffer.from(output).toString("base64");
-  return import(`data:text/javascript;base64,${encoded}#${Date.now()}-${Math.random()}`);
-}
-
-async function loadProxyModule() {
-  const source = await readFile(new URL("../app/api/backend/[...path]/route.ts", import.meta.url), "utf8");
   const output = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
@@ -223,7 +212,6 @@ for (const status of [400, 403, 429, 500, 502, 503, 504, 204, 401]) {
 
 test("an API 401 followed by a BFF 502 reports failure without logging out and recovers on retry", async () => {
   const api = await loadAuthModule();
-  const proxy = await loadProxyModule();
   const originalFetch = globalThis.fetch;
   const events = [];
   const session = {
@@ -239,9 +227,7 @@ test("an API 401 followed by a BFF 502 reports failure without logging out and r
       return Response.json({ ...session, accessToken: "new-token" });
     }
     if (url.endsWith("/auth/refresh")) {
-      const response = await proxy.POST(new Request(`http://localhost${url}`, init), {
-        params: Promise.resolve({ path: ["api", "auth", "refresh"] }),
-      });
+      const response = await proxyBackend(new Request(`http://localhost${url}`, init), "127.0.0.1");
       assert.equal(response.status, available ? 200 : 502);
       return response;
     }
@@ -348,9 +334,8 @@ async function proxyThrough(
   method,
   headers,
   path = ["api", "auth", "refresh"],
-  { base = "http://localhost:3000", trustedOrigins } = {},
+  { base = "http://localhost:3000", trustedOrigins, clientIp = "127.0.0.1" } = {},
 ) {
-  const proxy = await loadProxyModule();
   const originalFetch = globalThis.fetch;
   const originalTrusted = process.env.TRUSTED_ORIGINS;
   const forwarded = [];
@@ -366,7 +351,7 @@ async function proxyThrough(
       headers,
       body: method === "GET" ? undefined : "{}",
     });
-    const response = await proxy[method](request, { params: Promise.resolve({ path }) });
+    const response = await proxyBackend(request, clientIp);
     return { response, forwarded };
   } finally {
     globalThis.fetch = originalFetch;
@@ -454,33 +439,21 @@ test("backend proxy leaves reads and non-browser clients alone", async () => {
   assert.equal(script.forwarded.length, 1);
 });
 
-test("backend proxy replaces caller-supplied client identity with the edge address", async () => {
-  const proxy = await loadProxyModule();
-  const originalFetch = globalThis.fetch;
-  let forwardedHeaders;
-  globalThis.fetch = async (_url, init) => {
-    forwardedHeaders = new Headers(init.headers);
-    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+test("backend proxy stamps the ingress identity and forwards no input IP headers", async () => {
+  const inputHeaders = {
+    "cf-connecting-ip": "203.0.113.42",
+    "x-vercel-forwarded-for": "203.0.113.43",
+    "x-real-ip": "198.51.100.7",
+    "x-forwarded-for": "198.51.100.8, 198.51.100.9",
+    "x-bff-client-ip": "192.0.2.99",
   };
-
-  try {
-    const request = new Request("http://localhost/api/backend/api/auth/login", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.42",
-        "x-forwarded-for": "198.51.100.8, 198.51.100.9",
-        "x-bff-client-ip": "192.0.2.99",
-      },
-      body: "{}",
-    });
-    await proxy.POST(request, { params: Promise.resolve({ path: ["api", "auth", "login"] }) });
-
-    assert.equal(proxy.clientIpFromHeaders(request.headers), "203.0.113.42");
-    assert.equal(forwardedHeaders.get("x-bff-client-ip"), "203.0.113.42");
-    assert.equal(forwardedHeaders.has("cf-connecting-ip"), false);
-    assert.equal(forwardedHeaders.has("x-forwarded-for"), false);
-  } finally {
-    globalThis.fetch = originalFetch;
+  const loginPath = ["api", "auth", "login"];
+  for (const clientIp of ["192.0.2.10", null]) {
+    const { response, forwarded: [headers] } = await proxyThrough("POST", inputHeaders, loginPath, { clientIp });
+    assert.equal(response.status, 200);
+    assert.equal(headers.get("x-bff-client-ip"), clientIp);
+    for (const name of Object.keys(inputHeaders).filter((name) => name !== "x-bff-client-ip")) {
+      assert.equal(headers.has(name), false);
+    }
   }
 });

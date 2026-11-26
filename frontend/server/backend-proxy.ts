@@ -1,30 +1,8 @@
-﻿const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL ?? "http://127.0.0.1:18080";
-
+export const BACKEND_PROXY_PREFIX = "/api/backend/";
 const BFF_CLIENT_IP_HEADER = "x-bff-client-ip";
-const CLIENT_IP_SOURCE_HEADERS = [
-  "cf-connecting-ip",
-  "x-vercel-forwarded-for",
-  "x-forwarded-for",
-  "x-real-ip",
-] as const;
-
-export function clientIpFromHeaders(headers: Headers): string | null {
-  for (const name of CLIENT_IP_SOURCE_HEADERS) {
-    const value = headers.get(name);
-    if (!value) continue;
-
-    const candidate = value.split(",", 1)[0].trim();
-    const unwrapped = candidate.startsWith("[") && candidate.endsWith("]")
-      ? candidate.slice(1, -1)
-      : candidate;
-    if (unwrapped.length > 0 && unwrapped.length <= 45 && /^[0-9a-f:.]+$/i.test(unwrapped)) {
-      return unwrapped;
-    }
-  }
-  return null;
-}
-
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const PROXY_METHODS = new Set(["GET", "HEAD", ...UNSAFE_METHODS]);
+const ALLOWED_METHODS = [...PROXY_METHODS, "OPTIONS"].join(", ");
 
 /**
  * CSRF 防护：写请求必须来自本站页面。
@@ -71,26 +49,36 @@ function normalizeOrigin(value: string): string | null {
   }
 }
 
-async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }) {
+export async function proxyBackend(request: Request, clientIp: string | null) {
+  const incomingUrl = new URL(request.url);
+  const proxyPath = incomingUrl.pathname.slice(BACKEND_PROXY_PREFIX.length);
+  if (!incomingUrl.pathname.startsWith(BACKEND_PROXY_PREFIX) || !proxyPath) {
+    return new Response(null, { status: 404 });
+  }
+  if (!PROXY_METHODS.has(request.method)) {
+    return new Response(null, {
+      status: request.method === "OPTIONS" ? 204 : 405,
+      headers: { Allow: ALLOWED_METHODS },
+    });
+  }
   if (isCrossSiteWrite(request)) {
     return Response.json(
       { code: "CROSS_SITE_REQUEST_BLOCKED", message: "跨站请求已被拒绝，请从本站页面发起操作" },
       { status: 403 },
     );
   }
-  const { path } = await context.params;
-  if (!path.length || path.some((part) => part === ".." || part.includes("/"))) {
+  if (/%2f|%5c/i.test(proxyPath)) {
     return Response.json({ code: "INVALID_PROXY_PATH", message: "请求路径无效" }, { status: 400 });
   }
 
-  const incomingUrl = new URL(request.url);
-  const targetUrl = new URL(`/${path.join("/")}${incomingUrl.search}`, BACKEND_BASE_URL);
+  const targetUrl = new URL(process.env.BACKEND_BASE_URL ?? "http://127.0.0.1:18080");
+  targetUrl.pathname = `/${proxyPath}`;
+  targetUrl.search = incomingUrl.search;
   const headers = new Headers();
   for (const name of ["authorization", "content-type", "accept", "cookie", "origin", "sec-fetch-site"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  const clientIp = clientIpFromHeaders(request.headers);
   if (clientIp) headers.set(BFF_CLIENT_IP_HEADER, clientIp);
 
   try {
@@ -122,8 +110,3 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
 }
 
-export const GET = proxy;
-export const POST = proxy;
-export const PATCH = proxy;
-export const PUT = proxy;
-export const DELETE = proxy;
