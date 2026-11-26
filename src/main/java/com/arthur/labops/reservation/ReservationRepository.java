@@ -60,6 +60,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long>,
     @Query("select reservation.equipment.id from Reservation reservation where reservation.id = :id")
     java.util.Optional<Long> findEquipmentIdById(@Param("id") Long id);
 
+    @Query("select reservation.status from Reservation reservation where reservation.id = :id")
+    java.util.Optional<ReservationStatus> findStatusById(@Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select reservation from Reservation reservation where reservation.id = :id")
     java.util.Optional<Reservation> findByIdForUpdate(@Param("id") Long id);

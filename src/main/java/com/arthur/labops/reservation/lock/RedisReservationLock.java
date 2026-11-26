@@ -1,12 +1,18 @@
 package com.arthur.labops.reservation.lock;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
@@ -23,6 +29,9 @@ import com.arthur.labops.common.BusinessException;
 public class RedisReservationLock implements ReservationLock {
 
     private static final Logger log = LoggerFactory.getLogger(RedisReservationLock.class);
+    private static final String EQUIPMENT_PREFIX = "labops:reservation:equipment:";
+    private static final long BASE_RETRY_MS = 10L;
+    private static final long MAX_BACKOFF_MS = 80L;
 
     static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>(
             "if redis.call('get', KEYS[1]) == ARGV[1] then "
@@ -39,7 +48,7 @@ public class RedisReservationLock implements ReservationLock {
     private final Duration waitTime;
     private final Duration leaseTime;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public RedisReservationLock(
             StringRedisTemplate redisTemplate,
             @Value("${labops.reservation-lock.wait:2s}") Duration waitTime,
@@ -55,44 +64,58 @@ public class RedisReservationLock implements ReservationLock {
 
     @Override
     public <T> T execute(Long equipmentId, Supplier<T> action) {
-        return executeKey("labops:reservation:equipment:" + equipmentId, action);
+        return executeKeys(List.of(EQUIPMENT_PREFIX + equipmentId), action);
+    }
+
+    @Override
+    public <T> T executeWindow(Long equipmentId, Instant startTime, Instant endTime, Supplier<T> action) {
+        return executeKeys(ReservationLockKeys.forWindow(EQUIPMENT_PREFIX, equipmentId, startTime, endTime), action);
     }
 
     @Override
     public <T> T executeUser(Long userId, Supplier<T> action) {
-        return executeKey("labops:reservation:user:" + userId, action);
+        return executeKeys(List.of("labops:reservation:user:" + userId), action);
     }
 
-    private <T> T executeKey(String key, Supplier<T> action) {
-        String token = UUID.randomUUID().toString();
-        boolean acquired = tryAcquire(key, token);
-
-        if (!acquired) {
-            throw new BusinessException(
-                    "RESERVATION_LOCK_TIMEOUT",
-                    "预约请求较多，请稍后重试",
-                    HttpStatus.CONFLICT);
-        }
-        log.info("Redis reservation lock acquired key={}", key);
+    private <T> T executeKeys(List<String> keys, Supplier<T> action) {
+        long deadline = System.nanoTime() + waitTime.toNanos();
+        List<HeldLock> acquired = new ArrayList<>(keys.size());
         try {
+            for (String key : keys) {
+                String token = UUID.randomUUID().toString();
+                if (!tryAcquire(key, token, deadline)) {
+                    throw new BusinessException(
+                            "RESERVATION_LOCK_TIMEOUT",
+                            "预约请求较多，请稍后重试",
+                            HttpStatus.CONFLICT);
+                }
+                acquired.add(new HeldLock(key, token));
+                log.info("Redis reservation lock acquired key={}", key);
+            }
             // Database/JPA failures from the supplier must not be translated into Redis 503s.
             return action.get();
         } finally {
-            release(key, token);
+            for (int i = acquired.size() - 1; i >= 0; i--) {
+                HeldLock held = acquired.get(i);
+                release(held.key(), held.token());
+            }
         }
     }
 
-    private boolean tryAcquire(String key, String token) {
-        long deadline = System.nanoTime() + waitTime.toNanos();
+    private boolean tryAcquire(String key, String token, long deadline) {
         try {
-            boolean acquired;
-            do {
-                acquired = Boolean.TRUE.equals(commands.setIfAbsent(key, token, leaseTime));
-                if (!acquired) {
-                    pauseBriefly();
+            int attempt = 0;
+            while (true) {
+                if (Boolean.TRUE.equals(commands.setIfAbsent(key, token, leaseTime))) {
+                    return true;
                 }
-            } while (!acquired && System.nanoTime() < deadline);
-            return acquired;
+                if (System.nanoTime() >= deadline) {
+                    return false;
+                }
+                if (!pauseWithBackoff(attempt++, deadline)) {
+                    return false;
+                }
+            }
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(
                     "REDIS_UNAVAILABLE",
@@ -122,9 +145,17 @@ public class RedisReservationLock implements ReservationLock {
         }
     }
 
-    private void pauseBriefly() {
+    private boolean pauseWithBackoff(int attempt, long deadline) {
+        long remainingMs = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+        if (remainingMs <= 0L) {
+            return false;
+        }
+        long baseMs = Math.min(MAX_BACKOFF_MS, BASE_RETRY_MS << Math.min(attempt, 3));
+        long jitterMs = ThreadLocalRandom.current().nextLong(0L, (baseMs / 2L) + 1L);
+        long sleepMs = Math.max(1L, Math.min(baseMs + jitterMs, remainingMs));
         try {
-            Thread.sleep(50);
+            Thread.sleep(sleepMs);
+            return System.nanoTime() < deadline;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new BusinessException(
@@ -132,6 +163,9 @@ public class RedisReservationLock implements ReservationLock {
                     "预约请求被中断",
                     HttpStatus.SERVICE_UNAVAILABLE);
         }
+    }
+
+    private record HeldLock(String key, String token) {
     }
 
     private static final class TemplateCommands implements Commands {

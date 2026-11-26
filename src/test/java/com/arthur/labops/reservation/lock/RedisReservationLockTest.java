@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -12,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
@@ -227,27 +231,99 @@ class RedisReservationLockTest {
                 .contains("redis.call('del', KEYS[1])");
     }
 
+    @Test
+    void executeWindowAcquiresCrossMidnightDaysInAscendingOrderAndReleasesInReverse() {
+        RecordingCommands commands = RecordingCommands.successful(1L);
+        RedisReservationLock lock = newLock(commands);
+
+        Instant start = Instant.parse("2026-12-01T22:00:00Z");
+        Instant end = Instant.parse("2026-12-02T02:00:00Z");
+        long day1 = LocalDate.ofInstant(start, ZoneOffset.UTC).toEpochDay();
+        long day2 = LocalDate.ofInstant(end.minusNanos(1), ZoneOffset.UTC).toEpochDay();
+        String key1 = "labops:reservation:equipment:7:day:" + day1;
+        String key2 = "labops:reservation:equipment:7:day:" + day2;
+
+        String result = lock.executeWindow(7L, start, end, () -> "sharded");
+
+        assertThat(result).isEqualTo("sharded");
+        assertThat(commands.acquireKeys).containsExactly(key1, key2);
+        assertThat(commands.unlockCalls)
+                .extracting(UnlockCall::key)
+                .containsExactly(key2, key1);
+    }
+
+    @Test
+    void executeWindowReleasesFirstDayLockWhenSecondDayTimesOut() {
+        Instant start = Instant.parse("2026-12-01T22:00:00Z");
+        Instant end = Instant.parse("2026-12-02T02:00:00Z");
+        long day1 = LocalDate.ofInstant(start, ZoneOffset.UTC).toEpochDay();
+        long day2 = LocalDate.ofInstant(end.minusNanos(1), ZoneOffset.UTC).toEpochDay();
+        String key1 = "labops:reservation:equipment:7:day:" + day1;
+        String key2 = "labops:reservation:equipment:7:day:" + day2;
+
+        RecordingCommands commands = RecordingCommands.byKey(key -> !key.equals(key2));
+        RedisReservationLock lock = new RedisReservationLock(
+                commands, Duration.ofMillis(60), Duration.ofSeconds(10));
+
+        assertThatThrownBy(() -> lock.executeWindow(7L, start, end, () -> "should-not-run"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getCode())
+                .isEqualTo("RESERVATION_LOCK_TIMEOUT");
+
+        assertThat(commands.unlockCalls)
+                .extracting(UnlockCall::key)
+                .containsExactly(key1);
+    }
+
+    @Test
+    void executeWindowHandlesHalfOpenMidnightAndDegradesToEquipmentLockForExcessiveSpan() {
+        RecordingCommands commands = RecordingCommands.successful(1L);
+        RedisReservationLock lock = newLock(commands);
+
+        Instant start = Instant.parse("2026-12-01T22:00:00Z");
+        Instant midnight = Instant.parse("2026-12-02T00:00:00Z");
+        long day1 = LocalDate.ofInstant(start, ZoneOffset.UTC).toEpochDay();
+
+        lock.executeWindow(7L, start, midnight, () -> "single-day");
+        assertThat(commands.acquireKeys)
+                .containsExactly("labops:reservation:equipment:7:day:" + day1);
+
+        commands.acquireKeys.clear();
+        lock.executeWindow(7L, start, start.plus(Duration.ofDays(40)), () -> "fallback");
+        assertThat(commands.acquireKeys)
+                .containsExactly("labops:reservation:equipment:7");
+    }
+
     private static RedisReservationLock newLock(RedisReservationLock.Commands commands) {
         return new RedisReservationLock(commands, Duration.ofSeconds(2), Duration.ofSeconds(10));
     }
 
     private static final class RecordingCommands implements RedisReservationLock.Commands {
-        private final Supplier<Boolean> acquire;
+        private final Function<String, Boolean> acquire;
         private final BiFunction<String, String, Long> unlock;
         private final List<UnlockCall> unlockCalls = new ArrayList<>();
         private final List<Duration> leases = new ArrayList<>();
+        private final List<String> acquireKeys = new ArrayList<>();
         private final List<String> acquireTokens = new ArrayList<>();
         private final AtomicInteger acquireCalls = new AtomicInteger();
         private volatile Runnable onAcquire = () -> {
         };
 
         private RecordingCommands(Supplier<Boolean> acquire, BiFunction<String, String, Long> unlock) {
+            this(ignored -> acquire.get(), unlock);
+        }
+
+        private RecordingCommands(Function<String, Boolean> acquire, BiFunction<String, String, Long> unlock) {
             this.acquire = acquire;
             this.unlock = unlock;
         }
 
         static RecordingCommands successful(Long unlockResult) {
             return new RecordingCommands(() -> true, (key, token) -> unlockResult);
+        }
+
+        static RecordingCommands byKey(Function<String, Boolean> acquireByKey) {
+            return new RecordingCommands(acquireByKey, (key, token) -> 1L);
         }
 
         static RecordingCommands failingAcquire(RuntimeException error) {
@@ -274,10 +350,11 @@ class RedisReservationLockTest {
         @Override
         public Boolean setIfAbsent(String key, String token, Duration leaseTime) {
             acquireCalls.incrementAndGet();
+            acquireKeys.add(key);
             acquireTokens.add(token);
             leases.add(leaseTime);
             onAcquire.run();
-            return acquire.get();
+            return acquire.apply(key);
         }
 
         @Override

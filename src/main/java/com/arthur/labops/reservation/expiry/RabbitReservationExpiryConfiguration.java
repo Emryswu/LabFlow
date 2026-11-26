@@ -13,14 +13,16 @@ import org.springframework.context.annotation.Configuration;
 /**
  * RabbitMQ delayed expiry topology (no delayed-message plugin required).
  *
- * <p>Design (avoids per-message TTL head-of-line blocking on a shared FIFO queue):
+ * <p>Design (O(1) time-bucketed delay ladder + cascading requeue + lazy disarm):
  * <ul>
- *   <li>Each pending reservation gets a <strong>private delay queue</strong> with
- *       queue-level {@code x-message-ttl} equal to remaining delay.</li>
- *   <li>When that TTL elapses, RabbitMQ dead-letters the single message into the
- *       shared expiry work exchange/queue for consumption.</li>
- *   <li>Different delays never share a FIFO queue, so a long-delay message cannot
- *       block a short-delay message.</li>
+ *   <li>A constant set of shared bucket queues ({@code {delayQueuePrefix}bucket.{bucketMs}ms}),
+ *       each with a uniform queue-level {@code x-message-ttl} equal to {@code bucketMs}
+ *       dead-lettering into the shared expiry work exchange/queue.</li>
+ *   <li>Uniform TTL inside every bucket queue eliminates per-message FIFO head-of-line
+ *       blocking while keeping total broker queue count constant {@code O(1)}.</li>
+ *   <li>Payloads carry the target {@code deadlineEpochMs}. When a bucket expires early,
+ *       the listener checks reservation state (lazy disarm if already settled) or cascades
+ *       into the next finer bucket until {@code now >= deadline}.</li>
  *   <li>DB compensation scan remains as a safety net if broker/messages are lost.</li>
  * </ul>
  */
@@ -38,6 +40,11 @@ public class RabbitReservationExpiryConfiguration {
     public static final String EXPIRY_QUEUE = RabbitExpiryTopologyProperties.DEFAULT_EXPIRY_QUEUE;
     public static final String EXPIRY_ROUTING_KEY = RabbitExpiryTopologyProperties.DEFAULT_EXPIRY_ROUTING_KEY;
 
+    public static String bucketQueueName(long bucketMs) {
+        return RabbitExpiryTopologyProperties.DEFAULT_DELAY_QUEUE_PREFIX + "bucket." + bucketMs + "ms";
+    }
+
+    @Deprecated
     public static String delayQueueName(long reservationId, long expiresAtEpochMs) {
         return RabbitExpiryTopologyProperties.DEFAULT_DELAY_QUEUE_PREFIX + reservationId + "." + expiresAtEpochMs;
     }

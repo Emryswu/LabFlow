@@ -30,29 +30,29 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final PlatformUserRepository userRepository;
     private final AuthRefreshTx authRefreshTx;
-    private final LoginAttemptGuard loginAttemptGuard;
+    private final LoginAttemptThrottle loginAttemptThrottle;
 
     public AuthService(AuthenticationManager authenticationManager,
                        PlatformUserRepository userRepository,
                        AuthRefreshTx authRefreshTx,
-                       LoginAttemptGuard loginAttemptGuard) {
+                       LoginAttemptThrottle loginAttemptThrottle) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.authRefreshTx = authRefreshTx;
-        this.loginAttemptGuard = loginAttemptGuard;
+        this.loginAttemptThrottle = loginAttemptThrottle;
     }
 
     public IssuedAuthSession login(LoginRequest request, String clientIp) {
         String username = request.username().trim();
-        loginAttemptGuard.assertAllowed(clientIp, username);
+        loginAttemptThrottle.assertAllowed(clientIp, username);
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, request.password()));
         } catch (BadCredentialsException exception) {
-            loginAttemptGuard.recordFailure(clientIp, username);
+            loginAttemptThrottle.recordFailure(clientIp, username);
             throw new BusinessException("INVALID_CREDENTIALS", "用户名或密码错误", HttpStatus.UNAUTHORIZED);
         } catch (AuthenticationException exception) {
-            loginAttemptGuard.recordFailure(clientIp, username);
+            loginAttemptThrottle.recordFailure(clientIp, username);
             throw new BusinessException("AUTHENTICATION_FAILED", "登录失败", HttpStatus.UNAUTHORIZED);
         }
 
@@ -65,7 +65,7 @@ public class AuthService {
         // the account exists and the supplied password was correct.
         PlatformUser user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new BusinessException("INVALID_CREDENTIALS", "用户名或密码错误", HttpStatus.UNAUTHORIZED));
-        loginAttemptGuard.recordSuccess(clientIp, username);
+        loginAttemptThrottle.recordSuccess(clientIp, username);
         return authRefreshTx.issueLoginSession(user);
     }
 

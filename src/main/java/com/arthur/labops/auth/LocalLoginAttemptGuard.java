@@ -5,12 +5,12 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,12 +18,13 @@ import org.springframework.stereotype.Component;
 import com.arthur.labops.common.BusinessException;
 
 /**
- * In-memory login throttle. Keys are IP+username and IP, so one client cannot
- * lock a victim on another IP, and rotating usernames still hits the IP cap.
- * Fail-open is not needed: this never talks to Redis.
+ * In-memory login throttle ({@code labops.login.mode=local}). Keys are IP+username
+ * and IP, so one client cannot lock a victim on another IP, and rotating usernames
+ * still hits the IP cap.
  */
 @Component
-public class LoginAttemptGuard {
+@ConditionalOnProperty(name = "labops.login.mode", havingValue = "local", matchIfMissing = true)
+public class LocalLoginAttemptGuard implements LoginAttemptThrottle {
 
     static final int DEFAULT_MAX_BUCKETS = 10_000;
 
@@ -35,14 +36,14 @@ public class LoginAttemptGuard {
     private final ConcurrentHashMap<String, AttemptWindow> windows = new ConcurrentHashMap<>();
 
     @Autowired
-    public LoginAttemptGuard(
+    public LocalLoginAttemptGuard(
             @Value("${labops.login.max-failures-per-identity:5}") int maxPerIdentity,
             @Value("${labops.login.max-failures-per-ip:20}") int maxPerIp,
             @Value("${labops.login.window:15m}") Duration window) {
         this(maxPerIdentity, maxPerIp, window, DEFAULT_MAX_BUCKETS);
     }
 
-    LoginAttemptGuard(int maxPerIdentity, int maxPerIp, Duration window, int maxBuckets) {
+    LocalLoginAttemptGuard(int maxPerIdentity, int maxPerIp, Duration window, int maxBuckets) {
         if (maxBuckets <= 0) {
             throw new IllegalArgumentException("maxBuckets must be positive");
         }
@@ -52,16 +53,12 @@ public class LoginAttemptGuard {
         this.maxBuckets = maxBuckets;
     }
 
+    @Override
     public void assertAllowed(String clientIp, String username) {
         long now = System.currentTimeMillis();
         // Only the two buckets this request actually consults are pruned here.
-        // Sweeping the whole map per request made the check O(live buckets), and
-        // buckets are created precisely by the brute-force traffic this guard
-        // defends against — so the defence degraded fastest under attack.
-        // Bulk cleanup now runs on a schedule; see evictExpiredWindows.
-        //
-        // Read existing buckets only. Creating a per-username key here would let
-        // an IP-capped client grow the map by rotating usernames on 429s.
+        // Read existing buckets only: creating a per-username key on 429s would let
+        // an IP-capped client grow the map by rotating usernames.
         if (snapshotCount(ipKey(clientIp), now) >= maxPerIp
                 || snapshotCount(identityKey(clientIp, username), now) >= maxPerIdentity) {
             throw new BusinessException(
@@ -71,12 +68,14 @@ public class LoginAttemptGuard {
         }
     }
 
+    @Override
     public void recordFailure(String clientIp, String username) {
         long now = System.currentTimeMillis();
         record(identityKey(clientIp, username), now);
         record(ipKey(clientIp), now);
     }
 
+    @Override
     public void recordSuccess(String clientIp, String username) {
         windows.remove(identityKey(clientIp, username));
         windows.computeIfPresent(ipKey(clientIp), (key, window) -> {
@@ -117,8 +116,7 @@ public class LoginAttemptGuard {
     /**
      * Drops buckets whose attempts have all aged out. Runs on a timer instead of
      * inside {@link #assertAllowed} so a login check stays O(1) no matter how many
-     * buckets a brute-force attempt has created. Correctness never depended on this
-     * sweep — each check prunes the buckets it reads — only bounded memory does.
+     * buckets a brute-force attempt has created.
      */
     @Scheduled(fixedDelayString = "${labops.login.evict-interval:60000}")
     void evictExpiredWindows() {
@@ -153,14 +151,11 @@ public class LoginAttemptGuard {
     }
 
     static String identityKey(String clientIp, String username) {
-        return ipKey(clientIp) + "|" + username.trim().toLowerCase(Locale.ROOT);
+        return LoginThrottleKeys.identityKey(clientIp, username);
     }
 
     static String ipKey(String clientIp) {
-        if (clientIp == null || clientIp.isBlank()) {
-            return "ip:unknown";
-        }
-        return "ip:" + clientIp.trim();
+        return LoginThrottleKeys.ipKey(clientIp);
     }
 
     private static final class AttemptWindow {

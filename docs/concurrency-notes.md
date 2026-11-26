@@ -75,13 +75,16 @@ The same rule applies when the rotation's *response* is lost rather than duplica
 
 `RefreshTokenMysqlConcurrencyTest` repeats the concurrent + replay cases against MySQL 8.4 via Testcontainers when Docker is present. GitHub Actions must actually run that class (not skip it).
 
-## Redis lock, Rabbit expiry, and compensation
+## Redis lock, Rabbit expiry, login throttle, and compensation
 
 Three test layers:
 
-1. **Default CI (H2 + local lock + local expiry).** `./mvnw verify` on GitHub Actions. Covers Redis lock *protocol* with in-memory `Commands` (timeout, retry, compare-and-delete Lua, unlock errors must not hide a successful booking), local same-equipment serialization, per-queue TTL / `x-expires` (no shared FIFO), listener duplicate consume, late expiry on APPROVED/CANCELLED/COMPLETED, compensation idempotence, per-row `REQUIRES_NEW` isolation, and expire vs approve/cancel races.
+1. **Default CI (H2 + local lock + local expiry + local login throttle).** `./mvnw verify` on GitHub Actions. Covers:
+   - **Date-sharded application lock (`ReservationLock.executeWindow`)**: splits `[startTime, endTime)` into ascending UTC epoch-day keys (`equipment:{id}:day:{epochDay}`, falling back to equipment-wide lock for invalid/oversized spans > 31 days), acquires in ascending order and releases in reverse order so different-date bookings run concurrently without deadlocks; Redis mode adds exponential backoff with jitter (`10ms..80ms`) plus in-memory `Commands` protocol tests (timeout, retry, compare-and-delete Lua, partial multi-day acquisition rollback, unlock errors must not hide a successful booking).
+   - **O(1) time-bucketed RabbitMQ delay ladder**: fixed ladder (`100ms, 500ms, 1s, 5s, 15s, 60s, 300s, 900s, 3600s`) with in-memory queue-declaration cache (`ConcurrentHashMap.newKeySet()`), uniform queue-level `x-message-ttl` (no FIFO HOL blocking), versioned payloads carrying `@deadlineEpochMs` (with legacy bare-format backward compatibility), cascading requeue until `now >= deadline`, and lazy disarm via lock-free status check before re-queuing. Also covers listener duplicate consume, late expiry on APPROVED/CANCELLED/COMPLETED, compensation idempotence, per-row `REQUIRES_NEW` isolation, and expire vs approve/cancel races.
+   - **Dual-mode login throttle (`labops.login.mode=local|redis`)**: `LocalLoginAttemptGuard` (bounded-capacity in-memory sliding window) and `RedisLoginAttemptGuard` (atomic Redis ZSET + Lua `ZREMRANGEBYSCORE`/`ZCARD`/`ZADD`/`PEXPIRE`/`ZPOPMAX` sliding windows with fail-closed 503 on `assertAllowed` Redis outage), unit-tested with deterministic clocks and concurrent threads.
 2. **Real RabbitMQ.** `RabbitReservationExpiryOrderingIntegrationTest` skips unless `127.0.0.1:5672` is open. That is the only HOL proof against a broker. No Testcontainers.
-3. **Real Redis.** Not required in CI. Overlapping creates on default CI use the local lock plus equipment `PESSIMISTIC_WRITE`. Redis wait-timeout returns 409 and does **not** skip the database; writers that enter `create` still take the row lock.
+3. **Real Redis.** Not required in CI. Overlapping creates on default CI use the local date-sharded lock plus equipment `PESSIMISTIC_WRITE`. Redis wait-timeout returns 409 and does **not** skip the database; writers that enter `create` still take the row lock.
 
 `PESSIMISTIC_WRITE` remains the correctness backstop. Compensation lock order stays `Equipment → Reservation` (SQL inspector). A listener crash is recovered by the next compensation scan.
 

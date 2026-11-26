@@ -14,7 +14,7 @@ class LoginAttemptGuardTest {
 
     @Test
     void rotatingUsernamesAfterIpCapDoesNotGrowBuckets() {
-        LoginAttemptGuard guard = new LoginAttemptGuard(5, 3, Duration.ofHours(1));
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(5, 3, Duration.ofHours(1));
         for (int i = 0; i < 3; i++) {
             guard.assertAllowed("203.0.113.50", "seed-" + i);
             guard.recordFailure("203.0.113.50", "seed-" + i);
@@ -30,7 +30,7 @@ class LoginAttemptGuardTest {
 
     @Test
     void identityLimitStillRejectsSameUsername() {
-        LoginAttemptGuard guard = new LoginAttemptGuard(3, 20, Duration.ofHours(1));
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(3, 20, Duration.ofHours(1));
         for (int i = 0; i < 3; i++) {
             guard.assertAllowed("203.0.113.51", "teacher");
             guard.recordFailure("203.0.113.51", "teacher");
@@ -41,7 +41,7 @@ class LoginAttemptGuardTest {
 
     @Test
     void ipLimitStillRejectsOtherUsernames() {
-        LoginAttemptGuard guard = new LoginAttemptGuard(5, 3, Duration.ofHours(1));
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(5, 3, Duration.ofHours(1));
         for (int i = 0; i < 3; i++) {
             guard.assertAllowed("203.0.113.52", "user-" + i);
             guard.recordFailure("203.0.113.52", "user-" + i);
@@ -51,7 +51,7 @@ class LoginAttemptGuardTest {
 
     @Test
     void expiredWindowsAreDroppedAndCountingResumes() throws Exception {
-        LoginAttemptGuard guard = new LoginAttemptGuard(2, 2, Duration.ofMillis(80));
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(2, 2, Duration.ofMillis(80));
         guard.assertAllowed("203.0.113.53", "student");
         guard.recordFailure("203.0.113.53", "student");
         guard.assertAllowed("203.0.113.53", "other");
@@ -78,7 +78,7 @@ class LoginAttemptGuardTest {
      */
     @Test
     void singleCheckDoesNotSweepUnrelatedBuckets() throws Exception {
-        LoginAttemptGuard guard = new LoginAttemptGuard(5, 100, Duration.ofMillis(60));
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(5, 100, Duration.ofMillis(60));
         for (int i = 0; i < 20; i++) {
             guard.recordFailure("198.51.100." + i, "user-" + i);
         }
@@ -100,7 +100,7 @@ class LoginAttemptGuardTest {
 
     @Test
     void successfulLoginRemovesIdentityAndDecaysIp() {
-        LoginAttemptGuard guard = new LoginAttemptGuard(3, 20, Duration.ofHours(1));
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(3, 20, Duration.ofHours(1));
         guard.assertAllowed("203.0.113.54", "student");
         guard.recordFailure("203.0.113.54", "student");
         guard.assertAllowed("203.0.113.54", "student");
@@ -116,7 +116,7 @@ class LoginAttemptGuardTest {
 
     @Test
     void capacityLimitEvictsExpiredFirstThenOldestActiveBuckets() throws Exception {
-        LoginAttemptGuard expiredGuard = new LoginAttemptGuard(5, 20, Duration.ofMillis(60), 4);
+        LocalLoginAttemptGuard expiredGuard = new LocalLoginAttemptGuard(5, 20, Duration.ofMillis(60), 4);
         expiredGuard.recordFailure("198.51.100.1", "u1");
         expiredGuard.recordFailure("198.51.100.2", "u2");
         assertThat(expiredGuard.windowCount()).isEqualTo(4);
@@ -125,7 +125,7 @@ class LoginAttemptGuardTest {
         expiredGuard.recordFailure("198.51.100.3", "u3");
         assertThat(expiredGuard.windowCount()).isEqualTo(2);
 
-        LoginAttemptGuard activeGuard = new LoginAttemptGuard(1, 2, Duration.ofHours(1), 4);
+        LocalLoginAttemptGuard activeGuard = new LocalLoginAttemptGuard(1, 2, Duration.ofHours(1), 4);
         activeGuard.recordFailure("198.51.100.10", "first");
         Thread.sleep(10);
         activeGuard.recordFailure("198.51.100.11", "second");
@@ -144,7 +144,7 @@ class LoginAttemptGuardTest {
                 .doesNotThrowAnyException();
     }
 
-    private static void assertRateLimited(LoginAttemptGuard guard, String ip, String username) {
+    private static void assertRateLimited(LoginAttemptThrottle guard, String ip, String username) {
         assertThatThrownBy(() -> guard.assertAllowed(ip, username))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getCode())

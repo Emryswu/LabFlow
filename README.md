@@ -68,8 +68,8 @@
 
 ```text
 ReservationApplicationService.create
-└─ executeUser(userId)                 用户应用锁（配额）
-   └─ execute(equipmentId)             设备应用锁
+└─ executeUser(userId)                          用户应用锁（配额）
+   └─ executeWindow(equipmentId, start, end)    设备按 UTC 日历日分片有序锁
       └─ @Transactional ReservationService.create
          ├─ PlatformUser FOR UPDATE
          ├─ 统计未关闭配额（PENDING/APPROVED/AWAITING_PAYMENT/PAID/REFUNDING）
@@ -78,7 +78,7 @@ ReservationApplicationService.create
          └─ insert
 ```
 
-本地默认 `labops.reservation-lock.mode=local`（进程内公平锁）。production 切 Redis：`SET NX PX` 抢锁，Lua 比对 token 再 `DEL`，Redis 挂了直接 503，不降级成无锁。
+本地默认 `labops.reservation-lock.mode=local`（进程内公平锁）；按预约半开区间 `[startTime, endTime)` 切分为升序 UTC 日期槽 `equipment:{id}:day:{epochDay}` 加锁并逆序释放，同设备不同日期的预约完全并行互不阻塞。production 切 Redis：`SET NX PX` 抢锁（`labops:reservation:equipment:{id}:day:{epochDay}`），配合指数退避与随机抖动轮询缓解惊群，Lua 比对 token 再 `DEL`，Redis 挂了直接 503，不降级成无锁。
 
 状态变更（审批 / 取消 / 完成 / 过期 / 报修联动）固定 **Equipment → Reservation** 行锁，避免和创建路径形成 ABBA。创建路径是 **User → Equipment**，全项目没有反过来先锁设备再锁用户。
 
@@ -106,19 +106,13 @@ ReservationApplicationService.create
 
 production：`labops.reservation-expiry.mode=rabbit`。
 
-1. 审批截止时间取「创建时间 + 审批时限」与预约结束时间的较早者；每条待审批预约一条私有 delay queue：`labops.reservation.expiry.delay.{id}.{expiresAtMs}`
-2. 队列 TTL + DLX，到期进入共享工作队列
-3. 监听器执行过期；非法 payload（如 `not-a-number`）记 warning 后 ack 丢掉，不重投
-4. 空闲队列用 `x-expires` 自动删
+1. 审批截止时间取「创建时间 + 审批时限」与预约结束时间的较早者；采用 **O(1) 固定阶梯分桶延迟队列**（默认 9 档：`100ms, 500ms, 1s, 5s, 15s, 60s, 300s, 900s, 3600s`），队列名 `{delayQueuePrefix}bucket.{bucketMs}ms`，进程内 `ConcurrentHashMap.newKeySet()` 缓存已声明的桶队列，避免每条预约建删队列带来的 `O(N)` 元数据膨胀
+2. 每个固定桶队列仅设均匀队列级 `x-message-ttl` + DLX，同桶 TTL 完全一致（无 FIFO 队头阻塞），到期进入共享工作队列
+3. 消息体携带目标截止毫秒时间戳（`123@1732600000000` / `PAYMENT:123@1732600000000`），同时向后兼容不带 `@` 的历史裸格式（视为立即到期）；非法 payload 记 warning 后 ack 丢掉
+4. 监听器消费时若 `now < deadline`，先无锁查库判断预约是否仍在等待该截止（Lazy Disarm：已审批/已支付/已取消/不存在直接静默丢弃），仍在等待则级联重投进下一级更细的阶梯桶，直至 `now >= deadline` 再执行过期
 5. `ReservationExpiryCompensationJob` 始终扫库兜底
 
-**支付窗口复用同一套延时设施**，但用独立的队列命名空间 `labops.reservation.payment.delay.{id}.{deadlineMs}`，消息体带 `PAYMENT:` 前缀。审批截止时间仍然是裸数字，所以上一版留在 broker 里的消息升级后照样能解析。
-
-**截止时间会被主动撤销。** 以前预约一旦被审批或取消，那条延时任务照样挂到原定时刻——触发时状态守卫会挡住，无害，但队列（或本地 scheduler 的任务表）是按「历史上所有预约」增长而不是按「还开着的预约」增长的，加上支付窗口会让这个面直接翻倍。现在预约离开 `PENDING` / `AWAITING_PAYMENT` 时会发 disarm 事件，Rabbit 侧删掉私有队列，本地侧 cancel 掉 future。
-
-> `x-expires` 帮不上这个忙：它只回收**已经空掉**的队列，而待撤销的队列里正压着那条没投递的消息。
-
-撤销是尽力而为的清理，不是正确性手段——触发路径上的状态守卫仍然是让迟到截止时间无害的那道防线。
+**支付窗口复用同一套固定分桶延时设施**，载荷以 `PAYMENT:` 前缀区分业务类型。在共享固定分桶拓扑下，`cancel` 为轻量 no-op（不再删除共享桶队列），已决预约通过监听器的懒式状态检查提前停止级联并在实体状态守卫下保持幂等安全。
 
 本地默认 `expiry.mode=local`，不需要 broker。旧的共享 FIFO delay queue 启动时会清掉。真 broker 上的 HOL 验证见 `RabbitReservationExpiryOrderingIntegrationTest`（本机 `5672` 不通则跳过）。
 
@@ -271,7 +265,7 @@ production：`labops.reservation-expiry.mode=rabbit`。
 
 - Access JWT（HS256，默认 15 分钟）只放前端内存；Refresh 是不透明随机串，HttpOnly Cookie，库里只存 SHA-256。每次登录建一个 refresh family，成功 refresh 在族内轮换；出示已轮换成员且族内仍有活后继时整族吊销。并发双刷同一 cookie 以防盗优先，结束后 0 条 active refresh；Access JWT 语义不变（登出/reuse 后仍可用至过期）。V17 无法重建升级前已经发生的 refresh rotation lineage，因此迁移时旧 token 一行一 family，历史已 revoked 行按 LOGOUT 回填；refresh-family reuse detection 完整作用于 V17 之后的新 rotation。该迁移不强制现有用户会话登出。
 - 过滤器每次查库：用户删除/停用立即 401；权限用数据库角色，JWT 里的 role 不算数
-- 登录限流按 IP+用户名及 IP 总量计数（默认 15 分钟内分别 5 次、20 次）。Node BFF 用 `npm run dev` 或 `npm start` 启动，默认取 TCP 对端 IP。经反向代理部署时，把代理连接到下一跳所用的 IP 填进前端 `TRUSTED_PROXIES`（逗号分隔的精确 IP）。BFF 只沿可信代理从右往左读 `X-Forwarded-For`，遇到第一个未受信地址即停止。公网入口应以实际连接 IP 覆盖该头（如 Nginx `proxy_set_header X-Forwarded-For $remote_addr;`），其后的可信代理再附加各自收到的对端 IP。原先只写 `X-Real-IP` 或边缘地址头的 Node 部署需要改为这条转发链。
+- 登录限流按 IP+用户名及 IP 总量计数（默认 15 分钟内分别 5 次、20 次），支持双模可插拔 `labops.login.mode=local|redis`（默认 `local` 内存滑窗，production 启用 `redis` 基于 ZSET + Lua 原子滑动窗口实现多实例共享防爆破，Redis 异常时主检 fail-closed 503）。Node BFF 用 `npm run dev` 或 `npm start` 启动，默认取 TCP 对端 IP。经反向代理部署时，把代理连接到下一跳所用的 IP 填进前端 `TRUSTED_PROXIES`（逗号分隔的精确 IP）。BFF 只沿可信代理从右往左读 `X-Forwarded-For`，遇到第一个未受信地址即停止。公网入口应以实际连接 IP 覆盖该头（如 Nginx `proxy_set_header X-Forwarded-For $remote_addr;`），其后的可信代理再附加各自收到的对端 IP。原先只写 `X-Real-IP` 或边缘地址头的 Node 部署需要改为这条转发链。
 - `TRUST_EDGE_IP_HEADERS=true` 仅用于直接接收公网请求的 Cloudflare Worker 部署，作为 Worker 环境变量启用后只读平台提供的 `CF-Connecting-IP`。同区 Worker 子请求能改写这个值，只应在可控制同区请求链的部署中启用。BFF 统一写入 `X-BFF-Client-IP`，后端只接受 loopback 或私有服务网对端传来的该头，因此后端应保持内网可达。[Cloudflare HTTP 请求头](https://developers.cloudflare.com/fundamentals/reference/http-headers/#cf-connecting-ip)
 - CSRF：业务接口走 Bearer 头，浏览器不会自动携带；只有 login/refresh/logout 靠 cookie。`SameSite=Lax` 按「站点」判断，兄弟子域（same-site 但不同源）的 POST 仍会带上 cookie，所以另加 Fetch Metadata 校验，BFF（所有写请求）与后端（这三个接口）用同一条规则：有 `Sec-Fetch-Site` 时只放行 `same-origin`/`none`；旧浏览器不发该头但一定带 `Origin`，此时**完整 origin**（协议、主机、端口）必须在可信列表里，`Origin: null` 一律拒绝；两个头都没有才视为非浏览器客户端。可信列表来自环境变量 `TRUSTED_ORIGINS`（逗号分隔，前后端共用）；后端默认 `http://localhost:13000,http://127.0.0.1:13000`，BFF 未配置时取请求自身的 origin。**部署在终止 TLS 的反向代理后面时必须把它设成对外的 https origin**，否则 BFF 看到的是内网地址。Spring 的 `csrf().disable()` 因此保留
 - 默认 `server.address=127.0.0.1`；非 loopback 禁止 demo 账号/种子，并拒绝占位 JWT
