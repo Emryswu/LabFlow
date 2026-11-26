@@ -23,7 +23,19 @@ public class ReservationApplicationService {
 
     public ReservationResponse create(CreateReservationRequest request) {
         PlatformUser actor = currentUserService.getRequiredUser();
-        return reservationLock.executeUser(actor.getId(), () ->
-                reservationLock.execute(request.equipmentId(), () -> reservationService.create(request)));
+        return reservationLock.executeUser(actor.getId(), () -> {
+            if (request.startTime() != null
+                    && request.endTime() != null
+                    && request.endTime().isAfter(request.startTime())) {
+                return reservationLock.executeWindow(
+                        request.equipmentId(),
+                        request.startTime(),
+                        request.endTime(),
+                        () -> reservationService.create(request));
+            }
+            return reservationLock.execute(
+                    request.equipmentId(),
+                    () -> reservationService.create(request));
+        });
     }
 }

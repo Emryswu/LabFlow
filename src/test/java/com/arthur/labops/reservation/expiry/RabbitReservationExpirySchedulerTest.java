@@ -2,7 +2,9 @@ package com.arthur.labops.reservation.expiry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,28 +22,34 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /**
- * Proves short and long delays are isolated into separate queues with queue-level TTL
- * (the property that eliminates shared-FIFO head-of-line blocking).
+ * Verifies the O(1) time-bucketed delay ladder topology, queue declaration caching,
+ * lazy-disarm no-op cancel, and backwards-compatible payload encoding.
  */
 class RabbitReservationExpirySchedulerTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-11-26T10:00:00Z");
+
     private RecordingAmqpAdmin amqpAdmin;
     private CapturingRabbitTemplate rabbitTemplate;
+    private RabbitExpiryTopologyProperties topology;
     private RabbitReservationExpiryScheduler scheduler;
 
     @BeforeEach
     void setUp() {
         amqpAdmin = new RecordingAmqpAdmin();
         rabbitTemplate = new CapturingRabbitTemplate();
+        topology = new RabbitExpiryTopologyProperties();
         scheduler = new RabbitReservationExpiryScheduler(
-                amqpAdmin, rabbitTemplate, new RabbitExpiryTopologyProperties());
+                amqpAdmin,
+                rabbitTemplate,
+                topology,
+                Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
     }
 
     @Test
-    void longThenShortDelayUseSeparateQueuesAndShortHasSmallerQueueTtl() {
-        Instant now = Instant.now();
-        Instant longExpiry = now.plusSeconds(900); // 15 minutes
-        Instant shortExpiry = now.plusSeconds(12);
+    void longThenShortDelayUseSeparateFixedBucketQueuesWithUniformTtl() {
+        Instant longExpiry = FIXED_NOW.plusSeconds(900); // 900s -> 900_000ms bucket
+        Instant shortExpiry = FIXED_NOW.plusSeconds(12); // 12s -> 5_000ms bucket
 
         scheduler.schedule(101L, longExpiry);
         scheduler.schedule(202L, shortExpiry);
@@ -51,99 +59,135 @@ class RabbitReservationExpirySchedulerTest {
         Queue longQueue = amqpAdmin.declaredQueues.get(0);
         Queue shortQueue = amqpAdmin.declaredQueues.get(1);
 
-        assertThat(longQueue.getName())
-                .isEqualTo(RabbitReservationExpiryConfiguration.delayQueueName(101L, longExpiry.toEpochMilli()));
-        assertThat(shortQueue.getName())
-                .isEqualTo(RabbitReservationExpiryConfiguration.delayQueueName(202L, shortExpiry.toEpochMilli()));
+        assertThat(longQueue.getName()).isEqualTo(topology.bucketQueueName(900_000L));
+        assertThat(shortQueue.getName()).isEqualTo(topology.bucketQueueName(5_000L));
         assertThat(longQueue.getName()).isNotEqualTo(shortQueue.getName());
 
         long longTtl = ((Number) longQueue.getArguments().get("x-message-ttl")).longValue();
         long shortTtl = ((Number) shortQueue.getArguments().get("x-message-ttl")).longValue();
-        assertThat(longTtl).isGreaterThan(800_000L);
-        assertThat(shortTtl).isLessThan(20_000L);
-        assertThat(shortTtl).isLessThan(longTtl);
+        assertThat(longTtl).isEqualTo(900_000L);
+        assertThat(shortTtl).isEqualTo(5_000L);
 
         assertThat(longQueue.getArguments().get("x-dead-letter-exchange"))
                 .isEqualTo(RabbitReservationExpiryConfiguration.EXPIRY_EXCHANGE);
         assertThat(shortQueue.getArguments().get("x-dead-letter-routing-key"))
                 .isEqualTo(RabbitReservationExpiryConfiguration.EXPIRY_ROUTING_KEY);
 
-        // Empty delay queues must auto-delete after TTL + grace, otherwise they leak.
-        assertThat(((Number) longQueue.getArguments().get("x-expires")).longValue())
-                .isEqualTo(longTtl + RabbitReservationExpiryScheduler.QUEUE_EXPIRES_GRACE_MS);
-        assertThat(((Number) shortQueue.getArguments().get("x-expires")).longValue())
-                .isEqualTo(shortTtl + RabbitReservationExpiryScheduler.QUEUE_EXPIRES_GRACE_MS);
+        // Shared O(1) bucket queues persist without x-expires.
+        assertThat(longQueue.getArguments()).doesNotContainKey("x-expires");
+        assertThat(shortQueue.getArguments()).doesNotContainKey("x-expires");
         assertThat(longQueue.isDurable()).isTrue();
         assertThat(longQueue.isExclusive()).isFalse();
         assertThat(longQueue.isAutoDelete()).isFalse();
 
-        // Messages published to default exchange with routing key = private queue name (not shared FIFO).
+        // Messages carry target deadline epoch ms.
         assertThat(rabbitTemplate.sends).hasSize(2);
         assertThat(rabbitTemplate.sends.get(0).exchange()).isEmpty();
         assertThat(rabbitTemplate.sends.get(0).routingKey()).isEqualTo(longQueue.getName());
-        assertThat(rabbitTemplate.sends.get(0).body()).isEqualTo("101");
+        assertThat(rabbitTemplate.sends.get(0).body())
+                .isEqualTo("101@" + longExpiry.toEpochMilli());
         assertThat(rabbitTemplate.sends.get(1).routingKey()).isEqualTo(shortQueue.getName());
-        assertThat(rabbitTemplate.sends.get(1).body()).isEqualTo("202");
+        assertThat(rabbitTemplate.sends.get(1).body())
+                .isEqualTo("202@" + shortExpiry.toEpochMilli());
 
-        // Must not use legacy shared delay routing.
         assertThat(rabbitTemplate.sends)
                 .noneMatch(s -> RabbitReservationExpiryConfiguration.LEGACY_SHARED_DELAY_QUEUE.equals(s.routingKey()));
     }
 
-    /**
-     * The queue holds the pending message, so deleting it is what actually stops a
-     * settled deadline from dead-lettering later. {@code x-expires} does not help
-     * here: it only reaps queues that are already empty.
-     */
     @Test
-    void cancelDeletesTheDelayQueueThatStillHoldsTheMessage() {
-        Instant expiry = Instant.now().plusSeconds(900);
+    void bucketDeclarationsAreCachedAndTotalQueuesStayBoundedByLadderSize() {
+        for (int i = 1; i <= 50; i++) {
+            scheduler.schedule(ReservationDeadlineKind.APPROVAL, (long) i, FIXED_NOW.plusSeconds(15 + i));
+        }
+
+        // 15s..65s spans only the 15_000ms and 60_000ms buckets -> at most 2 declareQueue RPCs total.
+        assertThat(amqpAdmin.declaredQueues).hasSize(2);
+        assertThat(amqpAdmin.byName.keySet()).containsExactlyInAnyOrder(
+                topology.bucketQueueName(15_000L),
+                topology.bucketQueueName(60_000L));
+        assertThat(rabbitTemplate.sends).hasSize(50);
+    }
+
+    @Test
+    void subMinimumRemainingDelayUsesSmallestBucket() {
+        Instant almostDue = FIXED_NOW.plusMillis(30);
+        scheduler.schedule(ReservationDeadlineKind.APPROVAL, 77L, almostDue);
+
+        assertThat(amqpAdmin.declaredQueues).hasSize(1);
+        assertThat(amqpAdmin.declaredQueues.get(0).getName()).isEqualTo(topology.bucketQueueName(100L));
+        assertThat(rabbitTemplate.sends.get(0).routingKey()).isEqualTo(topology.bucketQueueName(100L));
+        assertThat(rabbitTemplate.sends.get(0).body()).isEqualTo("77@" + almostDue.toEpochMilli());
+    }
+
+    @Test
+    void dueOrPastDeadlineRoutesDirectlyToWorkExchangeWithoutDeclaringBucket() {
+        scheduler.schedule(ReservationDeadlineKind.APPROVAL, 11L, FIXED_NOW);
+        scheduler.schedule(ReservationDeadlineKind.PAYMENT, 12L, FIXED_NOW.minusMillis(50));
+
+        assertThat(amqpAdmin.declaredQueues).isEmpty();
+        assertThat(rabbitTemplate.sends).hasSize(2);
+        assertThat(rabbitTemplate.sends.get(0).exchange()).isEqualTo(topology.getExpiryExchange());
+        assertThat(rabbitTemplate.sends.get(0).routingKey()).isEqualTo(topology.getExpiryRoutingKey());
+        assertThat(rabbitTemplate.sends.get(0).body()).isEqualTo("11@" + FIXED_NOW.toEpochMilli());
+        assertThat(rabbitTemplate.sends.get(1).exchange()).isEqualTo(topology.getExpiryExchange());
+        assertThat(rabbitTemplate.sends.get(1).routingKey()).isEqualTo(topology.getExpiryRoutingKey());
+        assertThat(rabbitTemplate.sends.get(1).body()).isEqualTo("PAYMENT:12@" + FIXED_NOW.minusMillis(50).toEpochMilli());
+    }
+
+    @Test
+    void cancelIsNoOpAndNeverDeletesSharedBucketQueue() {
+        Instant expiry = FIXED_NOW.plusSeconds(900);
         scheduler.schedule(ReservationDeadlineKind.APPROVAL, 55L, expiry);
-        String delayQueue = RabbitReservationExpiryConfiguration.delayQueueName(55L, expiry.toEpochMilli());
-        assertThat(amqpAdmin.byName).containsKey(delayQueue);
+        String bucketQueue = topology.bucketQueueName(900_000L);
+        assertThat(amqpAdmin.byName).containsKey(bucketQueue);
 
         scheduler.cancel(ReservationDeadlineKind.APPROVAL, 55L, expiry);
 
-        assertThat(amqpAdmin.byName).doesNotContainKey(delayQueue);
-        assertThat(amqpAdmin.deletedQueues).containsExactly(delayQueue);
+        assertThat(amqpAdmin.byName).containsKey(bucketQueue);
+        assertThat(amqpAdmin.deletedQueues).isEmpty();
     }
 
-    /**
-     * Approval and payment deadlines share the dead-letter work queue but must not
-     * share a delay queue namespace, or cancelling one would delete the other's
-     * pending message.
-     */
     @Test
-    void paymentDeadlineUsesItsOwnQueueNamespaceAndTaggedPayload() {
-        Instant deadline = Instant.now().plusSeconds(600);
+    void paymentDeadlineCarriesTaggedPayloadWithTargetTimestamp() {
+        Instant deadline = FIXED_NOW.plusSeconds(600); // 600s -> 300_000ms bucket
         scheduler.schedule(ReservationDeadlineKind.APPROVAL, 8L, deadline);
         scheduler.schedule(ReservationDeadlineKind.PAYMENT, 8L, deadline);
 
-        assertThat(amqpAdmin.declaredQueues).hasSize(2);
-        String approvalQueue = amqpAdmin.declaredQueues.get(0).getName();
-        String paymentQueue = amqpAdmin.declaredQueues.get(1).getName();
-        assertThat(approvalQueue).isNotEqualTo(paymentQueue);
-        assertThat(approvalQueue)
-                .startsWith(RabbitExpiryTopologyProperties.DEFAULT_DELAY_QUEUE_PREFIX);
-        assertThat(paymentQueue)
-                .startsWith(RabbitExpiryTopologyProperties.DEFAULT_PAYMENT_DELAY_QUEUE_PREFIX);
+        // Both land in the same O(1) 300_000ms bucket, declared once.
+        assertThat(amqpAdmin.declaredQueues).hasSize(1);
+        assertThat(amqpAdmin.declaredQueues.get(0).getName()).isEqualTo(topology.bucketQueueName(300_000L));
 
-        // Untagged payload still means "approval", so messages written by the
-        // previous version keep decoding after this one deploys.
-        assertThat(rabbitTemplate.sends.get(0).body()).isEqualTo("8");
-        assertThat(rabbitTemplate.sends.get(1).body()).isEqualTo("PAYMENT:8");
-
-        scheduler.cancel(ReservationDeadlineKind.APPROVAL, 8L, deadline);
-        assertThat(amqpAdmin.byName)
-                .as("cancelling the approval deadline must leave the payment window armed")
-                .doesNotContainKey(approvalQueue)
-                .containsKey(paymentQueue);
+        assertThat(rabbitTemplate.sends.get(0).body()).isEqualTo("8@" + deadline.toEpochMilli());
+        assertThat(rabbitTemplate.sends.get(1).body()).isEqualTo("PAYMENT:8@" + deadline.toEpochMilli());
     }
 
     @Test
-    void delayQueueNameEncodesReservationAndExpiry() {
-        assertThat(RabbitReservationExpiryConfiguration.delayQueueName(7L, 1_700_000_000_000L))
-                .isEqualTo("labops.reservation.expiry.delay.7.1700000000000");
+    void payloadCodecSupportsVersionedAndLegacyFormats() {
+        Instant deadline = Instant.ofEpochMilli(1_732_600_000_000L);
+
+        assertThat(ReservationDeadlinePayload.encode(ReservationDeadlineKind.APPROVAL, 123L, deadline))
+                .isEqualTo("123@1732600000000");
+        assertThat(ReservationDeadlinePayload.encode(ReservationDeadlineKind.PAYMENT, 123L, deadline))
+                .isEqualTo("PAYMENT:123@1732600000000");
+
+        assertThat(ReservationDeadlinePayload.decode("123@1732600000000"))
+                .isEqualTo(new ReservationDeadlinePayload.Decoded(
+                        ReservationDeadlineKind.APPROVAL, 123L, 1_732_600_000_000L));
+        assertThat(ReservationDeadlinePayload.decode("PAYMENT:123@1732600000000"))
+                .isEqualTo(new ReservationDeadlinePayload.Decoded(
+                        ReservationDeadlineKind.PAYMENT, 123L, 1_732_600_000_000L));
+
+        // Legacy bare formats still decode with null deadlineEpochMs.
+        assertThat(ReservationDeadlinePayload.decode("123"))
+                .isEqualTo(new ReservationDeadlinePayload.Decoded(ReservationDeadlineKind.APPROVAL, 123L, null));
+        assertThat(ReservationDeadlinePayload.decode("PAYMENT:123"))
+                .isEqualTo(new ReservationDeadlinePayload.Decoded(ReservationDeadlineKind.PAYMENT, 123L, null));
+
+        // Malformed payloads return null.
+        assertThat(ReservationDeadlinePayload.decode("123@")).isNull();
+        assertThat(ReservationDeadlinePayload.decode("123@not-a-ts")).isNull();
+        assertThat(ReservationDeadlinePayload.decode("123@1@2")).isNull();
+        assertThat(ReservationDeadlinePayload.decode("UNKNOWN:123@1000")).isNull();
     }
 
     private record Send(String exchange, String routingKey, String body) {
