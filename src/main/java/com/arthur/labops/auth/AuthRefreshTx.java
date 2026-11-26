@@ -13,12 +13,14 @@ import com.arthur.labops.user.CurrentUserResponse;
 import com.arthur.labops.user.PlatformUser;
 
 /**
- * Refresh/logout token-state transactions live here. {@code AuthService.login}
- * keeps its existing outer {@code @Transactional}; this bean is not the only
- * auth writer. Lock order is family row then the presented token row; sibling
- * revocation uses a bulk UPDATE while holding the family lock. Refresh/logout
- * callers must map {@link RefreshOutcome} to HTTP only after this bean returns
- * so reuse/disable writes are already committed.
+ * Refresh/logout and login-session token-state transactions live here.
+ * {@code AuthService.login} stays outside any transaction during password
+ * verification so slow BCrypt hashing never pins a DB connection; only issuing
+ * the session runs inside {@link #issueLoginSession}. Lock order is family row
+ * then the presented token row; sibling revocation uses a bulk UPDATE while
+ * holding the family lock. Refresh/logout callers must map
+ * {@link RefreshOutcome} to HTTP only after this bean returns so reuse/disable
+ * writes are already committed.
  */
 @Service
 public class AuthRefreshTx {

@@ -1,6 +1,8 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { BACKEND_PROXY_PREFIX, proxyBackend } from "../server/backend-proxy.ts";
+import { normalizeIp } from "../server/client-ip.ts";
 
 /** The slice of Cloudflare's asset binding this worker uses; full typings live in @cloudflare/workers-types. */
 interface AssetsBinding {
@@ -8,6 +10,7 @@ interface AssetsBinding {
 }
 
 interface Env {
+  TRUST_EDGE_IP_HEADERS?: string;
   ASSETS: AssetsBinding;
   IMAGES: {
     input(stream: ReadableStream): {
@@ -32,6 +35,12 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (env && url.pathname.startsWith(BACKEND_PROXY_PREFIX)) {
+      const clientIp = env.TRUST_EDGE_IP_HEADERS === "true"
+        ? normalizeIp(request.headers.get("cf-connecting-ip"))
+        : null;
+      return proxyBackend(request, clientIp);
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

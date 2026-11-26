@@ -19,6 +19,13 @@ import com.arthur.labops.equipment.EquipmentRepository;
 import com.arthur.labops.equipment.EquipmentStatus;
 import com.arthur.labops.equipment.EquipmentStatusService;
 import com.arthur.labops.audit.AuditLogService;
+import com.arthur.labops.payment.PaymentIdempotency;
+import com.arthur.labops.payment.PaymentOrder;
+import com.arthur.labops.payment.PaymentOrderRepository;
+import com.arthur.labops.payment.PaymentRequest;
+import com.arthur.labops.payment.PaymentRequestRepository;
+import com.arthur.labops.payment.PaymentRequestStatus;
+import com.arthur.labops.payment.PaymentTransactionType;
 import com.arthur.labops.reservation.Reservation;
 import com.arthur.labops.reservation.ReservationClosure;
 import com.arthur.labops.reservation.ReservationClosureService;
@@ -70,6 +77,8 @@ public class WorkOrderService {
     private final EquipmentRepository equipmentRepository;
     private final FaultWorkOrderRepository workOrderRepository;
     private final ReservationRepository reservationRepository;
+    private final PaymentOrderRepository paymentOrderRepository;
+    private final PaymentRequestRepository paymentRequestRepository;
     private final PlatformUserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final AuditLogService auditLogService;
@@ -79,6 +88,8 @@ public class WorkOrderService {
     public WorkOrderService(EquipmentRepository equipmentRepository,
                             FaultWorkOrderRepository workOrderRepository,
                             ReservationRepository reservationRepository,
+                            PaymentOrderRepository paymentOrderRepository,
+                            PaymentRequestRepository paymentRequestRepository,
                             PlatformUserRepository userRepository,
                             CurrentUserService currentUserService,
                             AuditLogService auditLogService,
@@ -87,6 +98,8 @@ public class WorkOrderService {
         this.equipmentRepository = equipmentRepository;
         this.workOrderRepository = workOrderRepository;
         this.reservationRepository = reservationRepository;
+        this.paymentOrderRepository = paymentOrderRepository;
+        this.paymentRequestRepository = paymentRequestRepository;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
         this.auditLogService = auditLogService;
@@ -153,6 +166,12 @@ public class WorkOrderService {
                     "ASSIGNEE_DISABLED", "当前账号已停用", HttpStatus.FORBIDDEN);
         }
 
+        Long equipmentId = workOrderRepository.findEquipmentIdById(id)
+                .orElseThrow(() -> new BusinessException(
+                        "WORK_ORDER_NOT_FOUND", "故障工单不存在", HttpStatus.NOT_FOUND));
+        Equipment equipment = equipmentRepository.findByIdForUpdate(equipmentId)
+                .orElseThrow(() -> new BusinessException(
+                        "EQUIPMENT_NOT_FOUND", "设备不存在", HttpStatus.NOT_FOUND));
         FaultWorkOrder workOrder = workOrderRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException(
                         "WORK_ORDER_NOT_FOUND", "故障工单不存在", HttpStatus.NOT_FOUND));
@@ -169,9 +188,15 @@ public class WorkOrderService {
                     "工单已被接单或状态不可接",
                     HttpStatus.CONFLICT);
         }
+        if (equipment.getStatus() == EquipmentStatus.RETIRED) {
+            throw new BusinessException(
+                    "EQUIPMENT_RETIRED",
+                    "已退役设备不能接单或派单",
+                    HttpStatus.CONFLICT);
+        }
 
         workOrder.assign(actor.getId());
-        takeEquipmentOfflineFor(workOrder, actor);
+        takeEquipmentOfflineFor(workOrder, equipment, actor);
         auditLogService.record(actor, "WORK_ORDER_CLAIMED", "WORK_ORDER", workOrder.getId(),
                 "维修员主动接单");
         return WorkOrderResponse.from(workOrder);
@@ -180,6 +205,12 @@ public class WorkOrderService {
     @Transactional
     public WorkOrderResponse transition(Long id, TransitionWorkOrderRequest request) {
         PlatformUser actor = currentUserService.getRequiredUser();
+        Long equipmentId = workOrderRepository.findEquipmentIdById(id)
+                .orElseThrow(() -> new BusinessException(
+                        "WORK_ORDER_NOT_FOUND", "故障工单不存在", HttpStatus.NOT_FOUND));
+        Equipment equipment = equipmentRepository.findByIdForUpdate(equipmentId)
+                .orElseThrow(() -> new BusinessException(
+                        "EQUIPMENT_NOT_FOUND", "设备不存在", HttpStatus.NOT_FOUND));
         FaultWorkOrder workOrder = workOrderRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException(
                         "WORK_ORDER_NOT_FOUND", "故障工单不存在", HttpStatus.NOT_FOUND));
@@ -188,7 +219,7 @@ public class WorkOrderService {
         WorkOrderStatus target = request.targetStatus();
 
         if (workOrder.getCategory() == WorkOrderCategory.PAYMENT_DISCREPANCY) {
-            return transitionPaymentDiscrepancy(actor, workOrder, current, target, request.assigneeId());
+            return transitionPaymentDiscrepancy(actor, equipment, workOrder, current, target, request.assigneeId());
         }
 
         if (!ALLOWED_TRANSITIONS.get(current).contains(target)) {
@@ -202,13 +233,18 @@ public class WorkOrderService {
 
         if (target == WorkOrderStatus.ASSIGNED) {
             Long assigneeId = resolveAssigneeForAssignment(actor, request.assigneeId());
+            if (equipment.getStatus() == EquipmentStatus.RETIRED) {
+                throw new BusinessException(
+                        "EQUIPMENT_RETIRED",
+                        "已退役设备不能接单或派单",
+                        HttpStatus.CONFLICT);
+            }
             workOrder.assign(assigneeId);
-            takeEquipmentOfflineFor(workOrder, actor);
+            takeEquipmentOfflineFor(workOrder, equipment, actor);
         } else {
             workOrder.transitionTo(target);
         }
 
-        Long equipmentId = workOrder.getEquipment().getId();
         if (target == WorkOrderStatus.CLOSED || target == WorkOrderStatus.CANCELLED) {
             workOrderRepository.flush();
             equipmentStatusService.sync(equipmentId);
@@ -233,23 +269,21 @@ public class WorkOrderService {
             specification = specification.and((root, query, builder) ->
                     builder.equal(root.get("equipment").get("id"), equipmentId));
         }
-        if (actor.getRole() != UserRole.ADMIN) {
+        if (actor.getRole() == UserRole.TECHNICIAN) {
+            specification = specification.and(WorkOrderSpecifications.visibleToTechnician(actor.getId()));
+        } else if (actor.getRole() != UserRole.ADMIN) {
             specification = specification.and((root, query, builder) ->
                     builder.equal(root.get("category"), WorkOrderCategory.FAULT));
         }
         if (actor.getRole() == UserRole.STUDENT) {
             specification = specification.and((root, query, builder) ->
                     builder.equal(root.get("reporterId"), actor.getId()));
-        } else if (actor.getRole() == UserRole.TECHNICIAN) {
-            // 待接单池 + 已派给自己的故障工单。财务差账单不会进入维修流程。
-            specification = specification.and((root, query, builder) -> builder.or(
-                    builder.equal(root.get("status"), WorkOrderStatus.SUBMITTED),
-                    builder.equal(root.get("assigneeId"), actor.getId())));
         }
         return workOrderRepository.findAll(specification, pageable).map(WorkOrderResponse::from);
     }
 
     private WorkOrderResponse transitionPaymentDiscrepancy(PlatformUser actor,
+                                                            Equipment equipment,
                                                             FaultWorkOrder workOrder,
                                                             WorkOrderStatus current,
                                                             WorkOrderStatus target,
@@ -274,9 +308,46 @@ public class WorkOrderService {
         }
 
         workOrder.transitionTo(target);
+        if (target == WorkOrderStatus.CLOSED) {
+            settleRefundingReservationIfApplicable(actor, equipment, workOrder);
+        }
         auditLogService.record(actor, "WORK_ORDER_" + target.name(), "WORK_ORDER", workOrder.getId(),
                 "对账差异工单从 " + current + " 流转到 " + target);
         return WorkOrderResponse.from(workOrder);
+    }
+
+    private void settleRefundingReservationIfApplicable(PlatformUser actor, Equipment equipment, FaultWorkOrder workOrder) {
+        PaymentRequest haltedRefund = findHaltedCancellationRefund(workOrder);
+        if (haltedRefund == null) {
+            return;
+        }
+        PaymentOrder order = paymentOrderRepository.findByOrderNo(haltedRefund.getOrderNo()).orElse(null);
+        if (order == null || !Objects.equals(order.getEquipmentId(), equipment.getId())) {
+            return;
+        }
+        Reservation reservation = reservationRepository.findByIdForUpdate(order.getReservationId()).orElse(null);
+        if (reservation != null && reservation.getStatus() == ReservationStatus.REFUNDING) {
+            reservation.completeRefund();
+            auditLogService.record(actor, "RESERVATION_CANCELLED", "RESERVATION", reservation.getId(),
+                    "差账工单 #" + workOrder.getId() + " 已关闭，退款核销完成");
+        }
+    }
+
+    private PaymentRequest findHaltedCancellationRefund(FaultWorkOrder workOrder) {
+        String key = workOrder.getDiscrepancyKey();
+        if (key == null || !key.startsWith("outbound|")) {
+            return null;
+        }
+        String idempotencyKey = key.substring("outbound|".length());
+        if (idempotencyKey.isBlank()) {
+            return null;
+        }
+        return paymentRequestRepository.findByIdempotencyKey(idempotencyKey)
+                .filter(request -> request.getType() == PaymentTransactionType.REFUND)
+                .filter(request -> PaymentIdempotency.cancellationRefund(request.getOrderNo()).equals(idempotencyKey))
+                .filter(request -> request.getStatus() == PaymentRequestStatus.ABANDONED
+                        || request.getStatus() == PaymentRequestStatus.OBSOLETE)
+                .orElse(null);
     }
 
     /**
@@ -358,10 +429,7 @@ public class WorkOrderService {
      * regardless of the equipment's current status — otherwise closing this order
      * would let sync() bring the equipment back while it is still under repair.
      */
-    private void takeEquipmentOfflineFor(FaultWorkOrder workOrder, PlatformUser actor) {
-        Equipment equipment = equipmentRepository.findByIdForUpdate(workOrder.getEquipment().getId())
-                .orElseThrow(() -> new BusinessException(
-                        "EQUIPMENT_NOT_FOUND", "设备不存在", HttpStatus.NOT_FOUND));
+    private void takeEquipmentOfflineFor(FaultWorkOrder workOrder, Equipment equipment, PlatformUser actor) {
         workOrder.markEquipmentTakenOffline();
         if (equipment.getStatus() == EquipmentStatus.RETIRED
                 || equipment.getStatus() == EquipmentStatus.MAINTENANCE) {

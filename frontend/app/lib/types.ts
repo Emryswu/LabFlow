@@ -10,9 +10,28 @@ export type Reservation = { id: number; equipmentId: number; requesterId: number
   /** Only on PENDING rows from the list endpoint: non-empty means approving now would be rejected. */
   conflictsWith?: ReservationConflict[] };
 export type PaymentOrder = { orderNo: string; reservationId: number; amountCents: number; paidCents: number; refundedCents: number; status: string };
-export type WorkOrder = { id: number; equipmentId: number; reporterId: number; reporterName: string; title: string; description: string; category: "FAULT" | "PAYMENT_DISCREPANCY"; priority: string; status: string; assigneeId: number | null; createdAt: string; updatedAt: string; resolvedAt: string | null };
+export type WorkOrder = { id: number; equipmentId: number; equipmentStatus: Equipment["status"]; reporterId: number; reporterName: string; title: string; description: string; category: "FAULT" | "PAYMENT_DISCREPANCY"; priority: string; status: string; assigneeId: number | null; createdAt: string; updatedAt: string; resolvedAt: string | null };
 export type AuditLog = { id: number; actorUsername: string; actorRole: string; action: string; targetType: string; targetId: number | null; details: string; createdAt: string };
-export type Stats = { usersTotal: number; equipmentTotal: number; equipmentAvailable: number; equipmentMaintenance: number; equipmentInUse: number; equipmentRetired: number; reservationsPending: number; reservationsApproved: number; reservationsToday: number; workOrdersOpen: number; workOrdersUrgent: number; paymentDiscrepanciesOpen: number };
+export type Stats = {
+  usersTotal: number;
+  equipmentTotal: number;
+  equipmentAvailable: number;
+  equipmentMaintenance: number;
+  equipmentInUse: number;
+  equipmentRetired: number;
+  reservationsPending: number;
+  reservationsApproved: number;
+  reservationsToday: number;
+  workOrdersOpen: number;
+  workOrdersUrgent: number;
+  paymentDiscrepanciesOpen: number;
+  myReservationsPending?: number;
+  myReservationsActive?: number;
+  myWorkOrdersTotal?: number;
+  workOrdersClaimable?: number;
+  myWorkOrdersInProgress?: number;
+  technicianPriorityWorkOrders?: number;
+};
 /** Daily counts from /api/dashboard/trends, oldest first; the last day is today. */
 export type Trends = {
   days: string[];

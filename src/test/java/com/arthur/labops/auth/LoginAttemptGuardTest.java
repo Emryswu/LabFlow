@@ -114,6 +114,36 @@ class LoginAttemptGuardTest {
         guard.assertAllowed("203.0.113.54", "student");
     }
 
+    @Test
+    void capacityLimitEvictsExpiredFirstThenOldestActiveBuckets() throws Exception {
+        LoginAttemptGuard expiredGuard = new LoginAttemptGuard(5, 20, Duration.ofMillis(60), 4);
+        expiredGuard.recordFailure("198.51.100.1", "u1");
+        expiredGuard.recordFailure("198.51.100.2", "u2");
+        assertThat(expiredGuard.windowCount()).isEqualTo(4);
+
+        Thread.sleep(90);
+        expiredGuard.recordFailure("198.51.100.3", "u3");
+        assertThat(expiredGuard.windowCount()).isEqualTo(2);
+
+        LoginAttemptGuard activeGuard = new LoginAttemptGuard(1, 2, Duration.ofHours(1), 4);
+        activeGuard.recordFailure("198.51.100.10", "first");
+        Thread.sleep(10);
+        activeGuard.recordFailure("198.51.100.11", "second");
+        assertThat(activeGuard.windowCount()).isEqualTo(4);
+
+        // Touch the first IP's buckets (ipKey < maxPerIp=2, so both ipKey and identityKey are touched).
+        Thread.sleep(10);
+        assertRateLimited(activeGuard, "198.51.100.10", "first");
+
+        Thread.sleep(10);
+        activeGuard.recordFailure("198.51.100.12", "third");
+        assertThat(activeGuard.windowCount()).isEqualTo(4);
+        // The touched first IP remains protected while both buckets of the older untouched IP were evicted.
+        assertRateLimited(activeGuard, "198.51.100.10", "first");
+        assertThatCode(() -> activeGuard.assertAllowed("198.51.100.11", "second"))
+                .doesNotThrowAnyException();
+    }
+
     private static void assertRateLimited(LoginAttemptGuard guard, String ip, String username) {
         assertThatThrownBy(() -> guard.assertAllowed(ip, username))
                 .isInstanceOf(BusinessException.class)

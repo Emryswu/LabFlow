@@ -61,6 +61,16 @@ public final class ReservationStatuses {
         SCHEDULED = Set.copyOf(scheduled);
     }
 
+    /**
+     * Active reservations shown on the student dashboard: waiting for approval,
+     * confirmed, or awaiting payment (excluding REFUNDING, which is already cancelled).
+     */
+    public static final Set<ReservationStatus> ACTIVE_BY_USER = Set.copyOf(EnumSet.of(
+            ReservationStatus.PENDING,
+            ReservationStatus.APPROVED,
+            ReservationStatus.AWAITING_PAYMENT,
+            ReservationStatus.PAID));
+
     /** Blocks retiring the equipment. Same membership as {@link #QUOTA}, different question. */
     public static final Set<ReservationStatus> OPEN = QUOTA;
 

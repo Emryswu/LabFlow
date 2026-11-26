@@ -25,6 +25,7 @@ import com.arthur.labops.workorder.FaultWorkOrder;
 import com.arthur.labops.workorder.FaultWorkOrderRepository;
 import com.arthur.labops.workorder.WorkOrderCategory;
 import com.arthur.labops.workorder.WorkOrderPriority;
+import com.arthur.labops.workorder.WorkOrderSpecifications;
 import com.arthur.labops.workorder.WorkOrderStatus;
 
 import jakarta.persistence.criteria.Predicate;
@@ -58,6 +59,7 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public DashboardStatsResponse getStats() {
+        PlatformUser actor = currentUserService.getRequiredUser();
         ZoneId zone = ZoneId.systemDefault();
         LocalDate today = LocalDate.now(zone);
         Instant dayStart = today.atStartOfDay(zone).toInstant();
@@ -65,6 +67,10 @@ public class DashboardService {
         EnumSet<WorkOrderStatus> openStatuses = EnumSet.of(
                 WorkOrderStatus.SUBMITTED, WorkOrderStatus.ASSIGNED,
                 WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.RESOLVED);
+        EnumSet<WorkOrderStatus> inProgressStatuses = EnumSet.of(
+                WorkOrderStatus.ASSIGNED, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.RESOLVED);
+        EnumSet<WorkOrderPriority> highPriorities = EnumSet.of(
+                WorkOrderPriority.URGENT, WorkOrderPriority.HIGH);
         return new DashboardStatsResponse(
                 // Excludes the platform's own account: it is a foreign-key target for
                 // records the platform raises for itself, not a user of the platform.
@@ -82,7 +88,17 @@ public class DashboardService {
                 workOrderRepository.countByStatusIn(openStatuses),
                 workOrderRepository.countByPriorityAndStatusIn(WorkOrderPriority.URGENT, openStatuses),
                 // Discrepancy tickets the reconciliation job raised and nobody has closed yet.
-                workOrderRepository.countByCategoryAndStatusIn(WorkOrderCategory.PAYMENT_DISCREPANCY, openStatuses));
+                workOrderRepository.countByCategoryAndStatusIn(WorkOrderCategory.PAYMENT_DISCREPANCY, openStatuses),
+                reservationRepository.countByRequesterIdAndStatus(actor.getId(), ReservationStatus.PENDING),
+                reservationRepository.countByRequesterIdAndStatusIn(
+                        actor.getId(), ReservationStatuses.ACTIVE_BY_USER),
+                workOrderRepository.countByReporterIdAndCategory(actor.getId(), WorkOrderCategory.FAULT),
+                workOrderRepository.count(WorkOrderSpecifications.claimable()),
+                workOrderRepository.countByAssigneeIdAndCategoryAndStatusIn(
+                        actor.getId(), WorkOrderCategory.FAULT, inProgressStatuses),
+                workOrderRepository.count(WorkOrderSpecifications.visibleToTechnician(actor.getId())
+                        .and((root, query, builder) -> builder.and(
+                                root.get("status").in(openStatuses), root.get("priority").in(highPriorities)))));
     }
 
     /**

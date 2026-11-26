@@ -14,7 +14,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.arthur.labops.common.BusinessException;
 import com.arthur.labops.user.PlatformUser;
@@ -43,7 +42,6 @@ public class AuthService {
         this.loginAttemptGuard = loginAttemptGuard;
     }
 
-    @Transactional
     public IssuedAuthSession login(LoginRequest request, String clientIp) {
         String username = request.username().trim();
         loginAttemptGuard.assertAllowed(clientIp, username);

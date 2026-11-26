@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.lang.reflect.InvocationTargetException;
@@ -38,6 +39,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -54,6 +56,7 @@ import com.arthur.labops.payment.PaymentTransactionType;
 import com.arthur.labops.equipment.EquipmentRepository;
 import com.arthur.labops.reservation.ReservationRepository;
 import com.arthur.labops.reservation.ReservationStatus;
+import com.arthur.labops.user.PlatformUserRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -145,6 +148,47 @@ class MysqlCriticalConcurrencyRegressionTest {
         assertThat(jdbc.queryForObject(
                 "select count(*) from equipment_reservations where equipment_id=? and status='APPROVED'",
                 Long.class, equipmentId)).isEqualTo(1L);
+    }
+
+    @Test
+    void retirementSeesStudentFaultCommittedWhileWaitingForEquipmentLock() throws Exception {
+        Long equipmentId = createFreeEquipment();
+        String student = bearer(mvc, mapper, "student", "student123");
+        String admin = bearer(mvc, mapper, "admin", "admin123");
+        String report = mapper.writeValueAsString(Map.of(
+                "equipmentId", equipmentId, "title", "MySQL fault report",
+                "description", "Student report leaves the equipment available", "priority", "HIGH"));
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        Gate reportOwnsEquipment = new Gate("findByIdForUpdate", equipmentId, true);
+        Gate retirementHasOldSnapshot = new Gate("findByUsername", "admin", false);
+        try {
+            Future<MvcResult> created = submit(pool, reportOwnsEquipment, () -> mvc.perform(post("/api/work-orders")
+                            .header(HttpHeaders.AUTHORIZATION, student)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(report))
+                    .andExpect(status().isCreated()).andReturn());
+            reached(reportOwnsEquipment);
+
+            Future<MvcResult> retirement = submit(pool, retirementHasOldSnapshot,
+                    () -> mvc.perform(patch("/api/equipment/{id}/retire", equipmentId)
+                                    .header(HttpHeaders.AUTHORIZATION, admin))
+                            .andExpect(status().isConflict())
+                            .andExpect(jsonPath("$.code").value("EQUIPMENT_HAS_OPEN_WORK_ORDERS"))
+                            .andReturn());
+            reached(retirementHasOldSnapshot);
+            assertLockWait(retirementHasOldSnapshot, retirement);
+
+            reportOwnsEquipment.release.countDown();
+            created.get(30, TimeUnit.SECONDS);
+            retirement.get(30, TimeUnit.SECONDS);
+        } finally {
+            reportOwnsEquipment.release.countDown();
+            stop(pool);
+        }
+
+        assertThat(jdbc.queryForObject("select status from equipment where id=?", String.class, equipmentId))
+                .isEqualTo("AVAILABLE");
     }
 
     @Test
@@ -420,7 +464,8 @@ class MysqlCriticalConcurrencyRegressionTest {
                 @Override
                 public Object postProcessAfterInitialization(Object bean, String name) {
                     Class<?> repositoryType = bean instanceof ReservationRepository ? ReservationRepository.class
-                            : bean instanceof EquipmentRepository ? EquipmentRepository.class : null;
+                            : bean instanceof EquipmentRepository ? EquipmentRepository.class
+                            : bean instanceof PlatformUserRepository ? PlatformUserRepository.class : null;
                     if (repositoryType == null) {
                         return bean;
                     }
@@ -428,7 +473,8 @@ class MysqlCriticalConcurrencyRegressionTest {
                             (proxy, method, args) -> {
                                 Gate gate = control.lane.get();
                                 boolean selected = gate != null && gate.method.equals(method.getName())
-                                        && args != null && args.length > 0 && gate.argument.equals(args[0]);
+                                        && args != null && args.length > 0 && gate.argument.equals(args[0])
+                                        && TransactionSynchronizationManager.isActualTransactionActive();
                                 Object result;
                                 try {
                                     result = method.invoke(bean, args);

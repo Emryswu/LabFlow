@@ -1,6 +1,6 @@
 # Concurrency Notes
 
-## Reservation state changes and work-order creation
+## Reservation and work-order state changes
 
 LabFlow has two business paths that touch both equipment rows and reservation rows:
 
@@ -16,11 +16,13 @@ When the two paths run concurrently against the same equipment and related reser
 
 ### Fix
 
-All relevant state-changing paths now follow one lock hierarchy:
+Reservation and work-order transactions lock the equipment row first.
 
 `Equipment -> Reservation`
 
 Reservation approval, cancellation, and completion first resolve the equipment id, acquire the equipment row with a pessimistic write lock, and then acquire the reservation row with a pessimistic write lock. Work-order creation already follows the same cross-entity order. Reservation expiry (Rabbit listener and the DB compensation scan) uses the same order inside a `REQUIRES_NEW` transaction per reservation, so it cannot form an ABBA cycle with approval.
+
+Claiming, assigning, and transitioning an existing work order use `Equipment -> FaultWorkOrder`. When a claim or assignment cancels reservations, or closing an outbound refund discrepancy settles a reservation, the reservation lock follows the work-order lock. Retirement also locks equipment first and checks for open faults with a locking read before checking reservations. InnoDB `REPEATABLE READ` can otherwise reuse the snapshot from the earlier user lookup and miss a student report committed while retirement waited for the equipment lock.
 
 When a work order locks multiple reservations for one equipment item, the query also sorts by reservation primary key before applying the pessimistic lock:
 
@@ -35,6 +37,8 @@ A Spring Boot integration test installs a Hibernate `StatementInspector` and cap
 1. reservation approval acquires the `Equipment` `FOR UPDATE` lock before the `Reservation` `FOR UPDATE` lock;
 2. the work-order path's multi-reservation `FOR UPDATE` query contains an `ORDER BY` on the reservation id;
 3. the expiry compensation job also acquires `Equipment` before `Reservation`.
+
+`WorkOrderLockOrderAndRetireIntegrationTest` verifies that claiming and assigning a fault lock equipment before the work order. `PaymentDiscrepancyClosureIntegrationTest` verifies `Equipment -> FaultWorkOrder -> Reservation` when closing a halted cancellation refund ticket. `MysqlCriticalConcurrencyRegressionTest` checks on MySQL that a student fault report blocks retirement even when the report commits while retirement is waiting for the equipment lock. CI checks that this MySQL test ran and passed.
 
 `ReservationAbbaDeadlockConcurrencyTest` runs the live paths at a `CyclicBarrier`:
 
@@ -52,7 +56,7 @@ This change removes the identified `Equipment <-> Reservation` lock-order invers
 
 ## Refresh-token families
 
-Refresh/logout refresh-token state transactions are concentrated in `AuthRefreshTx`. `AuthService.login()` keeps its existing outer `@Transactional` and is not moved here. Auth writers (refresh, logout, family-wide reuse revocation) are a separate lock tree from reservations. They must not acquire equipment or reservation row locks.
+Refresh/logout refresh-token state transactions are concentrated in `AuthRefreshTx`. `AuthService.login()` runs without an outer `@Transactional` so slow BCrypt password verification does not hold a database connection; only `AuthRefreshTx.issueLoginSession` opens a short write transaction. Auth writers (refresh, logout, family-wide reuse revocation) are a separate lock tree from reservations. They must not acquire equipment or reservation row locks.
 
 Order inside the auth tree:
 

@@ -95,6 +95,16 @@ test("work orders show one forward step per row, by role and status", () => {
   assert.ok(rowOf(admin, "data-workorder-id", 5).includes('data-action="more"'), "cancel lives in the menu");
 });
 
+test("historical fault orders on retired equipment offer cancellation without assignment", () => {
+  const orders = [order(1, "SUBMITTED", { equipmentStatus: "RETIRED" })];
+  const adminRow = rowOf(renderOrders("ADMIN", orders, { equipment: null }), "data-workorder-id", 1);
+  assert.ok(!adminRow.includes('data-action="assign"'));
+  assert.ok(adminRow.includes('data-action="more"'), "admin still has the cancel menu");
+
+  const techRow = rowOf(renderOrders("TECHNICIAN", orders, { equipment: null }), "data-workorder-id", 1);
+  assert.ok(!techRow.includes('data-action="claim"'));
+});
+
 test("payment discrepancies offer admin processing without assignment or technician actions", () => {
   const orders = ["SUBMITTED", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED"].map((status, index) =>
     order(index + 1, status, { category: "PAYMENT_DISCREPANCY" }));
@@ -327,6 +337,28 @@ test("paid cancellation requires confirmation of the full refund amount and dism
   await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("退款中"));
   assert.equal(cancellations().length, 1);
   assert.equal(container.querySelector('[role="dialog"]'), null);
+});
+
+test("fully refunded paid reservation shows direct cancellation confirmation without ¥0.00 refund copy", async (t) => {
+  const { container, requests } = await mountChargedReservation(t, "PAID", async (path, init, setStatus) => {
+    if (path === "/api/payments/orders/LF00000042") {
+      return { ...paymentOrder, paidCents: 1234, refundedCents: 1234, status: "REFUNDED" };
+    }
+    assert.equal(path, "/api/reservations/42/cancel");
+    assert.equal(init.method, "PATCH");
+    setStatus("CANCELLED");
+    return chargedReservation("CANCELLED");
+  });
+  await act(async () => container.querySelector('[data-action="more"]').click());
+  await act(async () => document.querySelector('[data-menu="cancel"]').click());
+  await waitFor(() => container.querySelector('[data-action="confirm-refund"]'));
+  const dialog = container.querySelector('[role="dialog"]');
+  assert.doesNotMatch(dialog.textContent, /将全额退款|¥0\.00/);
+  assert.match(dialog.textContent, /无剩余可退金额/);
+  assert.equal(dialog.querySelector('[data-action="confirm-refund"]').textContent, "确认取消");
+  await act(async () => dialog.querySelector('[data-action="confirm-refund"]').click());
+  await waitFor(() => container.querySelector('[data-reservation-id="42"]')?.textContent.includes("已取消"));
+  assert.equal(requests.filter(({ path }) => path.endsWith("/cancel")).length, 1);
 });
 
 test("an unpaid charged reservation can be cancelled without initiating payment", async (t) => {

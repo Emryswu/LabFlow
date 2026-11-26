@@ -146,7 +146,10 @@ jobs:
           cases = suite.findall("testcase")
           bad = [case.attrib.get("name") for case in cases
                  if any(case.find(tag) is not None for tag in ("skipped", "failure", "error"))]
-          if len(cases) < 3 or bad or any(int(suite.get(tag, "0")) for tag in ("skipped", "failures", "errors")):
+          names = {case.get("name") for case in cases}
+          retirement_case = "retirementSeesStudentFaultCommittedWhileWaitingForEquipmentLock"
+          if len(cases) < 4 or retirement_case not in names or bad or any(
+                  int(suite.get(tag, "0")) for tag in ("skipped", "failures", "errors")):
               raise SystemExit(f"MySQL 关键并发回归未完整通过：cases={len(cases)}, bad={bad}, totals={suite.attrib}")
           print(f"MySQL 关键并发回归已执行：{len(cases)} 项全部通过，无 skipped")
           PY
