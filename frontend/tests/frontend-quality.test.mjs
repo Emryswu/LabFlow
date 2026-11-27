@@ -230,7 +230,7 @@ test("openCreate aborts slow equipment lookup on session switch without opening 
   let createSignal;
   let resolveEquipment;
   const equipmentPromise = new Promise((resolve) => { resolveEquipment = resolve; });
-  let equipmentCalls = 0;
+  let initialLookupDone = false;
 
   const { default: Home } = loadComponent("page.tsx", {
     subscribeSession: (next) => { listener = next; return () => {}; },
@@ -247,19 +247,19 @@ test("openCreate aborts slow equipment lookup on session switch without opening 
         case "/api/reservations": return { content: [], page: 0, size: 12, totalElements: 0, totalPages: 0 };
         case "/api/work-orders": return { content: [], page: 0, size: 12, totalElements: 0, totalPages: 0 };
         case "/api/equipment":
-          equipmentCalls += 1;
-          if (equipmentCalls === 1) {
-            return { content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 };
+          if (url.searchParams.get("size") === "100") {
+            createSignal = init?.signal;
+            return equipmentPromise;
           }
-          createSignal = init?.signal;
-          return equipmentPromise;
+          initialLookupDone = true;
+          return { content: [], page: 0, size: 1000, totalElements: 0, totalPages: 0 };
         default: throw new Error(`Unexpected API request: ${path}`);
       }
     },
   });
 
   await act(async () => root.render(React.createElement(Home)));
-  await waitFor(() => container.querySelector(".quick-card"));
+  await waitFor(() => initialLookupDone && container.querySelector(".quick-card"));
   await act(async () => container.querySelector(".quick-card").click());
   await waitFor(() => createSignal !== undefined);
   assert.equal(createSignal.aborted, false);
