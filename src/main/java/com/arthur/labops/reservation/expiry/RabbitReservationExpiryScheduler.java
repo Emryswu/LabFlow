@@ -5,8 +5,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +34,6 @@ public class RabbitReservationExpiryScheduler implements ReservationExpirySchedu
     private final RabbitTemplate rabbitTemplate;
     private final RabbitExpiryTopologyProperties topology;
     private final Clock clock;
-    private final Set<String> declaredBuckets = ConcurrentHashMap.newKeySet();
 
     @Autowired
     public RabbitReservationExpiryScheduler(AmqpAdmin amqpAdmin,
@@ -105,22 +102,14 @@ public class RabbitReservationExpiryScheduler implements ReservationExpirySchedu
     }
 
     private void ensureBucketDeclared(String queueName, long bucketMs) {
-        if (declaredBuckets.contains(queueName)) {
-            return;
-        }
-        synchronized (declaredBuckets) {
-            if (declaredBuckets.contains(queueName)) {
-                return;
-            }
-            Map<String, Object> args = new HashMap<>();
-            // Uniform queue-level TTL prevents HOL blocking inside the bucket.
-            args.put("x-message-ttl", bucketMs);
-            args.put("x-dead-letter-exchange", topology.getExpiryExchange());
-            args.put("x-dead-letter-routing-key", topology.getExpiryRoutingKey());
-
-            Queue queue = new Queue(queueName, true, false, false, args);
-            amqpAdmin.declareQueue(queue);
-            declaredBuckets.add(queueName);
-        }
+        // A process-local declaration cache cannot prove that the broker still
+        // has the queue after a restart, replacement, or administrative deletion.
+        // Queue declaration is idempotent; declare before routing each message.
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-message-ttl", bucketMs);
+        args.put("x-dead-letter-exchange", topology.getExpiryExchange());
+        args.put("x-dead-letter-routing-key", topology.getExpiryRoutingKey());
+        Queue queue = new Queue(queueName, true, false, false, args);
+        amqpAdmin.declareQueue(queue);
     }
 }
