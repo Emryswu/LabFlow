@@ -86,15 +86,19 @@ class PaymentIntentExpiryIntegrationTest {
         scenario.approve(reservationId);
         String orderNo = PaymentService.orderNoFor(reservationId);
 
-        // The channel is down for the first attempt, so the request is left FAILED
-        // and eligible for retry.
-        channel.failNextOutbound(1);
+        // Keep the channel down for the entire payment window. The queued
+        // dispatch and retry scan may both see the same pending intent before
+        // either records its failure.
+        channel.failNextOutbound(Integer.MAX_VALUE);
         assertThat(scenario.payViaApi(orderNo, "student", "student123")).isEqualTo(200);
 
         // While it waits, the payment window elapses and the slot goes back.
         awaitReservation(reservationId, ReservationStatus.EXPIRED);
         assertThat(orderRepository.findByOrderNo(orderNo).orElseThrow().getStatus())
                 .isEqualTo(PaymentOrderStatus.CLOSED);
+
+        // Recover the channel now: a stray retry must no longer be able to charge.
+        channel.failNextOutbound(0);
 
         String payKey = PaymentIdempotency.payment(orderNo);
         Await.until("the payment intent to be abandoned", Duration.ofSeconds(30),
