@@ -1,15 +1,21 @@
-import type { ReactNode } from "react";
-import { formatDateRange, roleLabels, statusLabels } from "../../lib/labels";
-import { dashboardCopy } from "../../lib/roles";
 import { conflictSummary } from "../../lib/conflicts";
-import { weekOverWeek, type WeekOverWeek } from "../../lib/trends";
+import { deriveDashboardSlices } from "../../lib/dashboard";
+import { indexById, roleLabels } from "../../lib/labels";
+import { dashboardCopy } from "../../lib/roles";
+import { type TrendSeries, weekOverWeek } from "../../lib/trends";
 import type { Equipment, ModalKind, PageData, Reservation, Stats, Trends, UserProfile, View, WorkOrder } from "../../lib/types";
-import { categoryIcon, Icon, type IconName } from "../icons";
+import { Icon, type IconName } from "../icons";
 import { Empty, StatusBadge } from "../ui";
-
-type Tone = "orange" | "amber" | "coral" | "green" | "blue" | "graphite";
-
-const OPEN_WORK_ORDER = new Set(["SUBMITTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED"]);
+import {
+  ActivityFeed,
+  EquipmentStatusPanel,
+  Panel,
+  PromoCard,
+  ReservationRow,
+  StatCard,
+  type StatTrendProps,
+  WorkOrderRow,
+} from "./DashboardWidgets";
 
 export function DashboardView({
   user,
@@ -40,29 +46,14 @@ export function DashboardView({
   onRefresh: () => void;
 }) {
   const copy = dashboardCopy(user.role, user.displayName);
-  const trend = (series: Parameters<typeof weekOverWeek>[1], caption: string): StatTrendProps | undefined => {
+  const trend = (series: TrendSeries, caption: string): StatTrendProps | undefined => {
     const data = weekOverWeek(trends, series);
     return data ? { data, caption } : undefined;
   };
   const reservationList = reservations?.content ?? [];
   const workorderList = workorders?.content ?? [];
-  const equipmentById = new Map((equipment?.content ?? []).map((item) => [item.id, item]));
-
-  const myPending = reservationList.filter((item) => item.status === "PENDING");
-  const myActiveReservations = reservationList.filter((item) =>
-    item.status === "PENDING" || item.status === "APPROVED" || item.status === "AWAITING_PAYMENT" || item.status === "PAID");
-  const pendingApprovals = reservationList.filter((item) => item.status === "PENDING");
-  const upcomingSchedule = [...reservationList]
-    .filter((item) => item.status === "PENDING" || item.status === "APPROVED" || item.status === "AWAITING_PAYMENT" || item.status === "PAID")
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .slice(0, 4);
-  const claimPool = workorderList.filter((item) =>
-    item.category === "FAULT" && item.status === "SUBMITTED" && item.equipmentStatus !== "RETIRED");
-  const myInProgress = workorderList.filter((item) =>
-    item.status === "ASSIGNED" || item.status === "IN_PROGRESS" || item.status === "RESOLVED");
-  const urgentOrders = workorderList.filter((item) =>
-    item.priority === "URGENT" || item.priority === "HIGH");
-  const openOrders = workorderList.filter((item) => OPEN_WORK_ORDER.has(item.status));
+  const equipmentById = indexById(equipment?.content);
+  const slices = deriveDashboardSlices(reservationList, workorderList);
 
   const reservationRow = (item: Reservation, withDecision: boolean) => <ReservationRow
     key={item.id}
@@ -103,22 +94,22 @@ export function DashboardView({
 
     <section className="stat-grid" aria-label="角色指标">
       {user.role === "STUDENT" && <>
-        <StatCard icon="calendar" tone="orange" label="我的待审批" value={stats?.myReservationsPending ?? myPending.length} unit="条" note="跟踪审批进度" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
-        <StatCard icon="clock" tone="amber" label="进行中预约" value={stats?.myReservationsActive ?? myActiveReservations.length} unit="条" note="含待批、已批与待付/已付" trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="calendar" tone="orange" label="我的待审批" value={stats?.myReservationsPending ?? slices.myPending.length} unit="条" note="跟踪审批进度" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="clock" tone="amber" label="进行中预约" value={stats?.myReservationsActive ?? slices.myActiveReservations.length} unit="条" note="含待批、已批与待付/已付" trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
         <StatCard icon="wrench" tone="coral" label="我的报修" value={stats?.myWorkOrdersTotal ?? workorders?.totalElements ?? workorderList.length} unit="条" note="故障进度可查" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
         <StatCard icon="microscope" tone="green" label="可预约设备" value={stats?.equipmentAvailable ?? 0} unit="台" note={`共 ${stats?.equipmentTotal ?? 0} 台在册`} onOpen={() => onViewChange("equipment")} />
       </>}
       {user.role === "TEACHER" && <>
-        <StatCard icon="calendar" tone="orange" label="待审批预约" value={stats?.reservationsPending ?? pendingApprovals.length} unit="条" note="优先处理申请" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
+        <StatCard icon="calendar" tone="orange" label="待审批预约" value={stats?.reservationsPending ?? slices.pendingApprovals.length} unit="条" note="优先处理申请" trend={trend("reservationsCreated", "近7天提交")} onOpen={() => onViewChange("reservations")} />
         <StatCard icon="clock" tone="amber" label="今日相关排期" value={stats?.reservationsToday ?? 0} unit="条" note={`已排期 ${stats?.reservationsApproved ?? 0} 条`} trend={trend("reservationsScheduled", "近7天排期")} onOpen={() => onViewChange("reservations")} />
         <StatCard icon="microscope" tone="green" label="可预约设备" value={stats?.equipmentAvailable ?? 0} unit="台" note={`维护中 ${stats?.equipmentMaintenance ?? 0} 台`} onOpen={() => onViewChange("equipment")} />
         <StatCard icon="wrench" tone="coral" label="故障动态" value={stats?.workOrdersOpen ?? 0} unit="条" note={`紧急 ${stats?.workOrdersUrgent ?? 0} 条`} trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
       </>}
       {user.role === "TECHNICIAN" && <>
-        <StatCard icon="inbox" tone="coral" label="待接单池" value={stats?.workOrdersClaimable ?? claimPool.length} unit="条" note="可主动接单" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
-        <StatCard icon="wrench" tone="amber" label="我的处理中" value={stats?.myWorkOrdersInProgress ?? myInProgress.length} unit="条" note="派给自己的在办单" trend={trend("workOrdersResolved", "近7天解决")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="inbox" tone="coral" label="待接单池" value={stats?.workOrdersClaimable ?? slices.claimPool.length} unit="条" note="可主动接单" trend={trend("workOrdersCreated", "近7天报修")} onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="wrench" tone="amber" label="我的处理中" value={stats?.myWorkOrdersInProgress ?? slices.myInProgress.length} unit="条" note="派给自己的在办单" trend={trend("workOrdersResolved", "近7天解决")} onOpen={() => onViewChange("workorders")} />
         <StatCard icon="microscope" tone="graphite" label="维护中设备" value={stats?.equipmentMaintenance ?? 0} unit="台" note={`共 ${stats?.equipmentTotal ?? 0} 台在册`} onOpen={() => onViewChange("equipment")} />
-        <StatCard icon="alert" tone="orange" label="紧急/高优" value={stats?.technicianPriorityWorkOrders ?? urgentOrders.length} unit="条" note="优先恢复可用" onOpen={() => onViewChange("workorders")} />
+        <StatCard icon="alert" tone="orange" label="紧急/高优" value={stats?.technicianPriorityWorkOrders ?? slices.urgentOrders.length} unit="条" note="优先恢复可用" onOpen={() => onViewChange("workorders")} />
       </>}
       {user.role === "ADMIN" && <>
         <StatCard icon="clipboard" tone="graphite" label="设备在册" value={stats?.equipmentTotal ?? 0} unit="台" note={`可预约 ${stats?.equipmentAvailable ?? 0} 台`} onOpen={() => onViewChange("equipment")} />
@@ -142,38 +133,37 @@ export function DashboardView({
         </Panel>
       </>}
 
-      {user.role === "TEACHER" && <>
+      {(user.role === "TEACHER" || user.role === "ADMIN") && (
         <Panel icon="calendar" title="待审批预约" action="全部预约" onAction={() => onViewChange("reservations")}>
-          {pendingApprovals.slice(0, 3).map((item) => reservationRow(item, true))}
-          {!pendingApprovals.length && <Empty text="当前没有待审批预约，排期保持畅通" />}
+          {slices.pendingApprovals.slice(0, 3).map((item) => reservationRow(item, true))}
+          {!slices.pendingApprovals.length && <Empty text="当前没有待审批预约，排期保持畅通" />}
         </Panel>
+      )}
+
+      {user.role === "TEACHER" && (
         <Panel icon="clock" title="近期排期" action="打开排期" onAction={() => onViewChange("reservations")}>
-          {upcomingSchedule.map((item) => reservationRow(item, false))}
-          {!upcomingSchedule.length && <Empty text="近期暂无占用排期" />}
+          {slices.upcomingSchedule.map((item) => reservationRow(item, false))}
+          {!slices.upcomingSchedule.length && <Empty text="近期暂无占用排期" />}
         </Panel>
-      </>}
+      )}
 
       {user.role === "TECHNICIAN" && <>
         <Panel icon="inbox" title="待接单池" action="去接单" onAction={() => onViewChange("workorders")}>
-          {claimPool.slice(0, 3).map(workorderRow)}
-          {!claimPool.length && <Empty text="待接单池为空，暂无未分配故障" />}
+          {slices.claimPool.slice(0, 3).map(workorderRow)}
+          {!slices.claimPool.length && <Empty text="待接单池为空，暂无未分配故障" />}
         </Panel>
         <Panel icon="wrench" title="我的处理中工单" action="打开工单" onAction={() => onViewChange("workorders")}>
-          {myInProgress.slice(0, 3).map(workorderRow)}
-          {!myInProgress.length && <Empty text="你还没有处理中的工单，可从待接单池认领" />}
+          {slices.myInProgress.slice(0, 3).map(workorderRow)}
+          {!slices.myInProgress.length && <Empty text="你还没有处理中的工单，可从待接单池认领" />}
         </Panel>
       </>}
 
-      {user.role === "ADMIN" && <>
-        <Panel icon="calendar" title="待审批预约" action="全部预约" onAction={() => onViewChange("reservations")}>
-          {pendingApprovals.slice(0, 3).map((item) => reservationRow(item, true))}
-          {!pendingApprovals.length && <Empty text="当前没有待审批预约，排期保持畅通" />}
-        </Panel>
+      {user.role === "ADMIN" && (
         <Panel icon="wrench" title="开放工单" action="全部工单" onAction={() => onViewChange("workorders")}>
-          {openOrders.slice(0, 3).map(workorderRow)}
-          {!openOrders.length && <Empty text="没有开放中的工单，设备运行平稳" />}
+          {slices.openOrders.slice(0, 3).map(workorderRow)}
+          {!slices.openOrders.length && <Empty text="没有开放中的工单，设备运行平稳" />}
         </Panel>
-      </>}
+      )}
     </section>
 
     <section className="dashboard-grid lower">
@@ -211,223 +201,10 @@ export function DashboardView({
   </div>;
 }
 
-function StatCard({ icon, tone, label, value, unit, note, trend, onOpen }: {
-  icon: IconName; tone: Tone; label: string; value: number; unit: string; note: string; trend?: StatTrendProps; onOpen: () => void;
-}) {
-  return <article className="stat-card">
-    <span className={`stat-icon tone-${tone}`}><Icon name={icon} size={24} /></span>
-    <div>
-      <small>{label}</small>
-      <strong>{value.toLocaleString("zh-CN")}<em>{unit}</em></strong>
-      <p>{note}</p>
-    </div>
-    {/* Spans the full card width: next to the number it gets cut off on mid-size screens. */}
-    {trend && <StatTrend {...trend} unit={unit} />}
-    <button type="button" className="stat-open" onClick={onOpen} aria-label={`查看${label}`}><Icon name="chevron" size={18} /></button>
-  </article>;
-}
-
-type StatTrendProps = { data: WeekOverWeek; caption: string };
-
-const BAR_WIDTH = 6;
-const BAR_GAP = 3;
-const CHART_HEIGHT = 24;
-
-/** Last 7 days as bars, plus the change against the 7 days before. */
-function StatTrend({ data, caption, unit }: StatTrendProps & { unit: string }) {
-  const max = Math.max(1, ...data.bars);
-  const width = data.bars.length * (BAR_WIDTH + BAR_GAP) - BAR_GAP;
-  const { change } = data;
-  const changeText = change.kind === "flat" ? "持平"
-    : change.kind === "new" ? "新增"
-      : `${change.percent}%`;
-  const summary = `${caption} ${data.current} ${unit}，前7天 ${data.previous} ${unit}`;
-  return <div className="stat-trend">
-    <svg className="spark" width={width} height={CHART_HEIGHT} viewBox={`0 0 ${width} ${CHART_HEIGHT}`} role="img" aria-label={summary}>
-      {data.bars.map((count, index) => {
-        // Zero days keep a 2px stub so an empty day still reads as a day.
-        const height = count === 0 ? 2 : Math.max(3, Math.round((count / max) * CHART_HEIGHT));
-        return <rect
-          key={data.days[index]}
-          className={count === 0 ? "spark-empty" : "spark-bar"}
-          x={index * (BAR_WIDTH + BAR_GAP)}
-          y={CHART_HEIGHT - height}
-          width={BAR_WIDTH}
-          height={height}
-          rx={count === 0 ? 1 : 2}
-        ><title>{`${dayTitle(data.days[index])} ${count} ${unit}`}</title></rect>;
-      })}
-    </svg>
-    <span className="trend-text">
-      {caption} <b>{data.current}</b>
-      <span className={`trend-change trend-${change.kind}`} title={`较前7天（${data.previous} ${unit}）`}>
-        {(change.kind === "up" || change.kind === "down") && <Icon name={change.kind === "up" ? "arrowUp" : "arrowDown"} size={12} />}
-        {changeText}
-      </span>
-    </span>
-  </div>;
-}
-
-/** "2026-10-17" -> "10月17日" without going through Date (no time-zone shift). */
-function dayTitle(day: string) {
-  const [, month, date] = day.split("-").map(Number);
-  return `${month}月${date}日`;
-}
-
-function Panel({ icon, title, action, onAction, children }: {
-  icon: IconName; title: string; action?: string; onAction?: () => void; children: ReactNode;
-}) {
-  return <article className="panel">
-    <header>
-      <h3><Icon name={icon} size={20} />{title}</h3>
-      {action && onAction && <button type="button" onClick={onAction}>{action}<Icon name="chevron" size={15} /></button>}
-    </header>
-    <div className="panel-body">{children}</div>
-  </article>;
-}
-
-function EquipThumb({ equipment }: { equipment?: Equipment }) {
-  return <span className="equip-thumb" title={equipment?.category}><Icon name={categoryIcon(equipment?.category)} size={24} /></span>;
-}
-
-function ReservationRow({ item, equipment, action }: { item: Reservation; equipment?: Equipment; action: ReactNode }) {
-  const conflict = conflictSummary(item);
-  return <div className="row-item">
-    <EquipThumb equipment={equipment} />
-    <div className="row-main">
-      <b>{equipment?.name ?? `设备 #${item.equipmentId}`}</b>
-      <small>{equipment ? `${equipment.code} · ` : ""}{item.purpose}</small>
-      {conflict && <small className="conflict-note" title={conflict.detail}><Icon name="alert" size={12} />{conflict.text}</small>}
-    </div>
-    <div className="row-meta">
-      <span>{formatDateRange(item.startTime, item.endTime, dayLabel)}</span>
-      <small>{item.requesterName}</small>
-    </div>
-    <div className="row-action">{action}</div>
-  </div>;
-}
-
-function WorkOrderRow({ item, equipment }: { item: WorkOrder; equipment?: Equipment }) {
-  return <div className="row-item">
-    <EquipThumb equipment={equipment} />
-    <div className="row-main">
-      <b>{equipment?.name ?? item.title}<span className={`tag tag-${item.priority.toLowerCase()}`}>{statusLabels[item.priority] ?? item.priority}</span></b>
-      <small>{item.title}</small>
-      <small className="row-sub">{item.reporterName} · {formatMoment(item.createdAt)}</small>
-    </div>
-    <div className="row-action"><StatusBadge value={item.status} /></div>
-  </div>;
-}
-
-function EquipmentStatusPanel({ stats, onOpen }: { stats: Stats | null; onOpen: () => void }) {
-  const total = stats?.equipmentTotal ?? 0;
-  const segments = [
-    { key: "available", label: "可预约", value: stats?.equipmentAvailable ?? 0, color: "var(--ok)" },
-    { key: "in-use", label: "使用中", value: stats?.equipmentInUse ?? 0, color: "var(--info)" },
-    { key: "maintenance", label: "维护中", value: stats?.equipmentMaintenance ?? 0, color: "var(--orange)" },
-    { key: "retired", label: "已退役", value: stats?.equipmentRetired ?? 0, color: "var(--idle)" },
-  ];
-  const radius = 52;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
-  return <Panel icon="pie" title="设备运行状态" action="查看全部设备" onAction={onOpen}>
-    <div className="status-chart">
-      <svg viewBox="0 0 140 140" role="img" aria-label={`设备共 ${total} 台`}>
-        <circle cx="70" cy="70" r={radius} fill="none" stroke="var(--track)" strokeWidth="18" />
-        {total > 0 && segments.map((segment) => {
-          const length = (segment.value / total) * circumference;
-          const dash = <circle key={segment.key} cx="70" cy="70" r={radius} fill="none" stroke={segment.color} strokeWidth="18"
-            strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-offset} transform="rotate(-90 70 70)" />;
-          offset += length;
-          return dash;
-        })}
-        <text x="70" y="68" textAnchor="middle" className="chart-total">{total.toLocaleString("zh-CN")}</text>
-        <text x="70" y="88" textAnchor="middle" className="chart-caption">设备总数</text>
-      </svg>
-      <ul>
-        {segments.map((segment) => <li key={segment.key}>
-          <i style={{ background: segment.color }} />
-          <span>{segment.label}</span>
-          <b>{segment.value}</b>
-          <small>{total ? Math.round((segment.value / total) * 100) : 0}%</small>
-        </li>)}
-      </ul>
-    </div>
-  </Panel>;
-}
-
-type Activity = { key: string; at: string; icon: IconName; tone: Tone; kind: string; text: ReactNode };
-
-function ActivityFeed({ reservations, workorders, equipmentById }: {
-  reservations: Reservation[]; workorders: WorkOrder[]; equipmentById: Map<number, Equipment>;
-}) {
-  const nameOf = (id: number) => equipmentById.get(id)?.name ?? `设备 #${id}`;
-  const items: Activity[] = [
-    ...reservations.map((item): Activity => ({
-      key: `r-${item.id}`,
-      at: item.createdAt,
-      icon: "calendar",
-      tone: item.status === "PENDING" ? "orange" : "blue",
-      kind: "预约",
-      text: <>{item.requesterName} 预约了 <b>{nameOf(item.equipmentId)}</b>，{statusLabels[item.status] ?? item.status}</>,
-    })),
-    ...workorders.map((item): Activity => ({
-      key: `w-${item.id}`,
-      at: item.createdAt,
-      icon: "wrench",
-      tone: item.priority === "URGENT" ? "coral" : "amber",
-      kind: "工单",
-      text: <>{item.reporterName} 报修 <b>{nameOf(item.equipmentId)}</b>：{item.title}</>,
-    })),
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 5);
-
-  if (!items.length) return <Empty text="暂无近期动态" />;
-  return <ol className="activity">
-    {items.map((item) => <li key={item.key}>
-      <span className={`activity-icon tone-${item.tone}`}><Icon name={item.icon} size={16} /></span>
-      <em>{item.kind}</em>
-      <p>{item.text}</p>
-      <time dateTime={item.at}>{formatMoment(item.at)}</time>
-    </li>)}
-  </ol>;
-}
-
 function QuickCard({ icon, title, hint, onClick }: { icon: IconName; title: string; hint: string; onClick: () => void }) {
   return <button type="button" className="quick-card" onClick={onClick}>
     <span><Icon name={icon} size={26} /></span>
     <b>{title}</b>
     <small>{hint}</small>
   </button>;
-}
-
-function PromoCard({ stats }: { stats: Stats | null }) {
-  const total = stats?.equipmentTotal ?? 0;
-  const inService = total - (stats?.equipmentRetired ?? 0);
-  const reservable = inService > 0 ? Math.round(((stats?.equipmentAvailable ?? 0) / inService) * 100) : 0;
-  return <article className="promo-card">
-    <h3>更可靠的设备运行<br />支撑更卓越的科研创新</h3>
-    <p>高效 · 安全 · 规范 · 可持续</p>
-    <dl>
-      <div><dt>在册设备</dt><dd>{total.toLocaleString("zh-CN")}</dd></div>
-      <div><dt>今日排期</dt><dd>{stats?.reservationsToday ?? 0}</dd></div>
-      <div><dt>当前可预约率</dt><dd>{reservable}%</dd></div>
-    </dl>
-  </article>;
-}
-
-function dayLabel(date: Date) {
-  const today = new Date();
-  const startOf = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
-  const diff = Math.round((startOf(date) - startOf(today)) / 86_400_000);
-  if (diff === 0) return "今天";
-  if (diff === 1) return "明天";
-  if (diff === -1) return "昨天";
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
-}
-
-const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-
-function formatMoment(value: string) {
-  const date = new Date(value);
-  return `${dayLabel(date)} ${clock(date)}`;
 }

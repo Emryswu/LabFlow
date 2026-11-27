@@ -1,10 +1,25 @@
+import type { UserProfile } from "./types";
+
 type ApiError = { code?: string; message?: string };
 
 export type AuthSession = {
   accessToken: string;
   expiresIn: number;
-  user: { id: number; username: string; displayName: string; role: string };
+  user: UserProfile;
 };
+
+async function readApiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const detail = await response.json() as unknown;
+    if (typeof detail === "object" && detail !== null && "message" in detail) {
+      const message = (detail as ApiError).message;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+  } catch {
+    /* empty or non-JSON error body */
+  }
+  return `${fallback}（${response.status}）`;
+}
 
 export type LoginResult = AuthSession;
 
@@ -94,9 +109,7 @@ export async function loginRequest(username: string, password: string): Promise<
       cache: "no-store",
     });
     if (!response.ok) {
-      let detail: ApiError = {};
-      try { detail = await response.json() as ApiError; } catch { /* empty */ }
-      throw new Error(detail.message || `登录失败（${response.status}）`);
+      throw new Error(await readApiErrorMessage(response, "登录失败"));
     }
     return response.json() as Promise<LoginResult>;
   });
@@ -218,9 +231,7 @@ export async function api<T>(path: string, accessToken: string, init?: RequestIn
   }
 
   if (!response.ok) {
-    let detail: ApiError = {};
-    try { detail = await response.json() as ApiError; } catch { /* empty response */ }
-    throw new Error(detail.message || `请求失败（${response.status}）`);
+    throw new Error(await readApiErrorMessage(response, "请求失败"));
   }
   if (response.status === 204) {
     return undefined as T;

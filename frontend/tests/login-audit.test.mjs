@@ -58,7 +58,7 @@ function backendAuditActions() {
   assert.match(joined, /"WORK_ORDER_" \+ target\.name\(\)/, "dynamic work-order action changed; update this test");
   assert.match(joined, /"RESERVATION_" \+ request\.decision\(\)\.name\(\)/, "dynamic reservation action changed; update this test");
   const workOrderStatuses = readFileSync(join(javaRoot, "workorder/WorkOrderStatus.java"), "utf8")
-    .match(/enum WorkOrderStatus \{([\s\S]*?)\}/)[1].match(/[A-Z_]+/g);
+    .match(/enum WorkOrderStatus \{([\s\S]*?)\}/)[1].split(";")[0].match(/[A-Z_]+/g);
   // A work order is created as SUBMITTED, never transitioned to it.
   for (const status of workOrderStatuses.filter((status) => status !== "SUBMITTED")) actions.add(`WORK_ORDER_${status}`);
   for (const decision of ["APPROVED", "REJECTED"]) actions.add(`RESERVATION_${decision}`);
