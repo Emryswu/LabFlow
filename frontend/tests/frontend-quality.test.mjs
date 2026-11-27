@@ -247,12 +247,12 @@ test("openCreate aborts slow equipment lookup on session switch without opening 
         case "/api/reservations": return { content: [], page: 0, size: 12, totalElements: 0, totalPages: 0 };
         case "/api/work-orders": return { content: [], page: 0, size: 12, totalElements: 0, totalPages: 0 };
         case "/api/equipment":
-          if (url.searchParams.get("size") === "100") {
+          if (!url.searchParams.has("sort")) {
             createSignal = init?.signal;
             return equipmentPromise;
           }
           initialLookupDone = true;
-          return { content: [], page: 0, size: 1000, totalElements: 0, totalPages: 0 };
+          return { content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 };
         default: throw new Error(`Unexpected API request: ${path}`);
       }
     },
