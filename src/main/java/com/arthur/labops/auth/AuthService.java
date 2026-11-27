@@ -44,15 +44,15 @@ public class AuthService {
 
     public IssuedAuthSession login(LoginRequest request, String clientIp) {
         String username = request.username().trim();
-        loginAttemptThrottle.assertAllowed(clientIp, username);
+        String attempt = loginAttemptThrottle.beginAttempt(clientIp, username);
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, request.password()));
         } catch (BadCredentialsException exception) {
-            loginAttemptThrottle.recordFailure(clientIp, username);
+            loginAttemptThrottle.recordFailure(clientIp, username, attempt);
             throw new BusinessException("INVALID_CREDENTIALS", "用户名或密码错误", HttpStatus.UNAUTHORIZED);
         } catch (AuthenticationException exception) {
-            loginAttemptThrottle.recordFailure(clientIp, username);
+            loginAttemptThrottle.recordFailure(clientIp, username, attempt);
             throw new BusinessException("AUTHENTICATION_FAILED", "登录失败", HttpStatus.UNAUTHORIZED);
         }
 
@@ -65,7 +65,7 @@ public class AuthService {
         // the account exists and the supplied password was correct.
         PlatformUser user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new BusinessException("INVALID_CREDENTIALS", "用户名或密码错误", HttpStatus.UNAUTHORIZED));
-        loginAttemptThrottle.recordSuccess(clientIp, username);
+        loginAttemptThrottle.recordSuccess(clientIp, username, attempt);
         return authRefreshTx.issueLoginSession(user);
     }
 

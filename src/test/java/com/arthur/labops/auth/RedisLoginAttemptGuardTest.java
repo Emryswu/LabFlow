@@ -35,14 +35,13 @@ class RedisLoginAttemptGuardTest {
                 commands, 3, 20, Duration.ofMinutes(15), clock);
 
         for (int i = 0; i < 3; i++) {
-            guard.assertAllowed("203.0.113.10", "teacher");
-            guard.recordFailure("203.0.113.10", "teacher");
+            fail(guard, "203.0.113.10", "teacher");
             clock.advanceMillis(1);
         }
 
         assertRateLimited(guard, "203.0.113.10", "TEACHER");
         assertRateLimited(guard, "203.0.113.10", " teacher ");
-        assertThatCode(() -> guard.assertAllowed("198.51.100.99", "teacher"))
+        assertThatCode(() -> guard.beginAttempt("198.51.100.99", "teacher"))
                 .doesNotThrowAnyException();
     }
 
@@ -54,8 +53,7 @@ class RedisLoginAttemptGuardTest {
                 commands, 5, 3, Duration.ofMinutes(15), clock);
 
         for (int i = 0; i < 3; i++) {
-            guard.assertAllowed("203.0.113.20", "user-" + i);
-            guard.recordFailure("203.0.113.20", "user-" + i);
+            fail(guard, "203.0.113.20", "user-" + i);
         }
         int keyCountBeforeRotation = commands.zsets.size();
         assertThat(keyCountBeforeRotation).isEqualTo(4);
@@ -73,9 +71,9 @@ class RedisLoginAttemptGuardTest {
         Duration window = Duration.ofSeconds(60);
         RedisLoginAttemptGuard guard = new RedisLoginAttemptGuard(commands, 2, 2, window, clock);
 
-        guard.recordFailure("203.0.113.30", "alice");
+        fail(guard, "203.0.113.30", "alice");
         clock.advanceMillis(10_000);
-        guard.recordFailure("203.0.113.30", "bob");
+        fail(guard, "203.0.113.30", "bob");
         assertRateLimited(guard, "203.0.113.30", "charlie");
 
         assertThat(commands.ttlsMs.get(RedisLoginAttemptGuard.redisIpKey("203.0.113.30")))
@@ -83,7 +81,7 @@ class RedisLoginAttemptGuardTest {
 
         // Advance past the first failure (at t=0) but keep second (at t=10s) inside window.
         clock.advanceMillis(50_001);
-        assertThatCode(() -> guard.assertAllowed("203.0.113.30", "charlie"))
+        assertThatCode(() -> guard.beginAttempt("203.0.113.30", "charlie"))
                 .doesNotThrowAnyException();
     }
 
@@ -94,14 +92,15 @@ class RedisLoginAttemptGuardTest {
         RedisLoginAttemptGuard guard = new RedisLoginAttemptGuard(
                 commands, 3, 4, Duration.ofMinutes(15), clock);
 
-        guard.recordFailure("203.0.113.40", "student");
+        fail(guard, "203.0.113.40", "student");
         clock.advanceMillis(5);
-        guard.recordFailure("203.0.113.40", "student");
+        fail(guard, "203.0.113.40", "student");
         clock.advanceMillis(5);
-        guard.recordFailure("203.0.113.40", "other");
+        fail(guard, "203.0.113.40", "other");
         clock.advanceMillis(5);
 
-        guard.recordSuccess("203.0.113.40", "student");
+        String successful = guard.beginAttempt("203.0.113.40", "student");
+        guard.recordSuccess("203.0.113.40", "student", successful);
 
         assertThat(commands.zsets).doesNotContainKey(
                 RedisLoginAttemptGuard.redisIdentityKey("203.0.113.40", "student"));
@@ -127,7 +126,7 @@ class RedisLoginAttemptGuardTest {
                     ready.countDown();
                     try {
                         start.await(5, TimeUnit.SECONDS);
-                        guard.recordFailure("203.0.113.50", "concurrent-user");
+                        fail(guard, "203.0.113.50", "concurrent-user");
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
                     } finally {
@@ -155,7 +154,7 @@ class RedisLoginAttemptGuardTest {
         RedisLoginAttemptGuard connGuard = new RedisLoginAttemptGuard(
                 failingConn, 5, 20, Duration.ofMinutes(15), Clock.systemUTC());
 
-        assertThatThrownBy(() -> connGuard.assertAllowed("203.0.113.60", "student"))
+        assertThatThrownBy(() -> connGuard.beginAttempt("203.0.113.60", "student"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> {
                     BusinessException business = (BusinessException) ex;
@@ -168,7 +167,7 @@ class RedisLoginAttemptGuardTest {
         RedisLoginAttemptGuard opGuard = new RedisLoginAttemptGuard(
                 failingOp, 5, 20, Duration.ofMinutes(15), Clock.systemUTC());
 
-        assertThatThrownBy(() -> opGuard.assertAllowed("203.0.113.60", "student"))
+        assertThatThrownBy(() -> opGuard.beginAttempt("203.0.113.60", "student"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> {
                     BusinessException business = (BusinessException) ex;
@@ -176,27 +175,49 @@ class RedisLoginAttemptGuardTest {
                     assertThat(business.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
                 });
 
-        assertThatCode(() -> opGuard.recordFailure("203.0.113.60", "student")).doesNotThrowAnyException();
-        assertThatCode(() -> opGuard.recordSuccess("203.0.113.60", "student")).doesNotThrowAnyException();
+        assertThatCode(() -> opGuard.recordFailure("203.0.113.60", "student", "test")).doesNotThrowAnyException();
+        assertThatCode(() -> opGuard.recordSuccess("203.0.113.60", "student", "test")).doesNotThrowAnyException();
     }
 
     @Test
     void luaScriptsContainAtomicSlidingWindowCommands() {
         assertThat(RedisLoginAttemptGuard.ASSERT_ALLOWED_SCRIPT.getScriptAsString())
                 .contains("ZREMRANGEBYSCORE")
-                .contains("ZCARD");
+                .contains("ZCARD").contains("ZADD");
         assertThat(RedisLoginAttemptGuard.RECORD_FAILURE_SCRIPT.getScriptAsString())
                 .contains("ZREMRANGEBYSCORE")
                 .contains("ZADD")
                 .contains("PEXPIRE");
         assertThat(RedisLoginAttemptGuard.RECORD_SUCCESS_SCRIPT.getScriptAsString())
-                .contains("DEL")
+                .contains("ZREM")
                 .contains("ZREMRANGEBYSCORE")
-                .contains("ZPOPMIN");
+                .contains("ZRANGE");
+    }
+
+    @Test
+    void concurrentAdmissionCountsInFlightAcrossInstancesAndSuccessDoesNotEraseOthers() {
+        InMemoryRedisCommands commands = new InMemoryRedisCommands();
+        Clock clock = Clock.fixed(Instant.parse("2026-11-26T10:00:00Z"), ZoneOffset.UTC);
+        RedisLoginAttemptGuard a = new RedisLoginAttemptGuard(commands, 2, 3, Duration.ofMinutes(15), clock);
+        RedisLoginAttemptGuard b = new RedisLoginAttemptGuard(commands, 2, 3, Duration.ofMinutes(15), clock);
+        String first = a.beginAttempt("203.0.113.10", "student");
+        String second = b.beginAttempt("203.0.113.10", "student");
+        assertRateLimited(a, "203.0.113.10", "student");
+        a.recordSuccess("203.0.113.10", "student", first);
+        String third = a.beginAttempt("203.0.113.10", "student");
+        assertRateLimited(b, "203.0.113.10", "student");
+        b.recordFailure("203.0.113.10", "student", second);
+        a.recordFailure("203.0.113.10", "student", third);
+        assertRateLimited(b, "203.0.113.10", "student");
+    }
+
+    private static void fail(LoginAttemptThrottle guard, String ip, String username) {
+        String attempt = guard.beginAttempt(ip, username);
+        guard.recordFailure(ip, username, attempt);
     }
 
     private static void assertRateLimited(LoginAttemptThrottle guard, String ip, String username) {
-        assertThatThrownBy(() -> guard.assertAllowed(ip, username))
+        assertThatThrownBy(() -> guard.beginAttempt(ip, username))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getCode())
                 .isEqualTo("LOGIN_RATE_LIMITED");
@@ -208,7 +229,7 @@ class RedisLoginAttemptGuardTest {
 
         @Override
         public synchronized Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp,
-                                              int maxPerIdentity) {
+                                              int maxPerIdentity, long nowMs, String member, long windowMs) {
             prune(ipKey, cutoffMs);
             if (size(ipKey) >= maxPerIp) {
                 return 1L;
@@ -217,30 +238,41 @@ class RedisLoginAttemptGuardTest {
             if (size(identityKey) >= maxPerIdentity) {
                 return 2L;
             }
+            add(ipKey, cutoffMs, nowMs, "p:" + member, windowMs);
+            add(identityKey, cutoffMs, nowMs, "p:" + member, windowMs);
             return 0L;
         }
 
         @Override
         public synchronized void recordFailure(String ipKey, String identityKey, long cutoffMs, long nowMs,
                                                String member, long windowMs) {
-            add(ipKey, cutoffMs, nowMs, member, windowMs);
-            add(identityKey, cutoffMs, nowMs, member, windowMs);
+            settleFailure(ipKey, cutoffMs, nowMs, member, windowMs);
+            settleFailure(identityKey, cutoffMs, nowMs, member, windowMs);
         }
 
         @Override
-        public synchronized void recordSuccess(String ipKey, String identityKey, long cutoffMs) {
-            zsets.remove(identityKey);
-            ttlsMs.remove(identityKey);
+        public synchronized void recordSuccess(String ipKey, String identityKey, long cutoffMs, String member) {
             prune(ipKey, cutoffMs);
-            Map<String, Long> ipSet = zsets.get(ipKey);
-            if (ipSet != null && !ipSet.isEmpty()) {
-                ipSet.entrySet().stream()
+            prune(identityKey, cutoffMs);
+            Map<String, Long> identity = zsets.get(identityKey);
+            if (identity == null || identity.remove("p:" + member) == null) return;
+            identity.keySet().removeIf(key -> !key.startsWith("p:"));
+            Map<String, Long> ip = zsets.get(ipKey);
+            if (ip != null) {
+                ip.remove("p:" + member);
+                ip.entrySet().stream().filter(entry -> !entry.getKey().startsWith("p:"))
                         .min(Comparator.comparingLong(Map.Entry::getValue))
-                        .map(Map.Entry::getKey)
-                        .ifPresent(ipSet::remove);
-                if (ipSet.isEmpty()) {
-                    zsets.remove(ipKey);
-                }
+                        .map(Map.Entry::getKey).ifPresent(ip::remove);
+            }
+            prune(ipKey, cutoffMs);
+            prune(identityKey, cutoffMs);
+        }
+
+        private void settleFailure(String key, long cutoff, long now, String member, long ttl) {
+            prune(key, cutoff);
+            Map<String, Long> set = zsets.get(key);
+            if (set != null && set.remove("p:" + member) != null) {
+                add(key, cutoff, now, "f:" + member, ttl);
             }
         }
 
@@ -275,7 +307,8 @@ class RedisLoginAttemptGuardTest {
         }
 
         @Override
-        public Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp, int maxPerIdentity) {
+        public Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp, int maxPerIdentity,
+                                 long nowMs, String member, long windowMs) {
             throw error;
         }
 
@@ -286,7 +319,7 @@ class RedisLoginAttemptGuardTest {
         }
 
         @Override
-        public void recordSuccess(String ipKey, String identityKey, long cutoffMs) {
+        public void recordSuccess(String ipKey, String identityKey, long cutoffMs, String member) {
             throw error;
         }
     }
