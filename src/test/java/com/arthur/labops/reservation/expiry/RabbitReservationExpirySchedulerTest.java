@@ -22,7 +22,7 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /**
- * Verifies the O(1) time-bucketed delay ladder topology, queue declaration caching,
+ * Verifies the O(1) time-bucketed delay ladder topology, idempotent queue declaration and recovery,
  * lazy-disarm no-op cancel, and backwards-compatible payload encoding.
  */
 class RabbitReservationExpirySchedulerTest {
@@ -95,17 +95,29 @@ class RabbitReservationExpirySchedulerTest {
     }
 
     @Test
-    void bucketDeclarationsAreCachedAndTotalQueuesStayBoundedByLadderSize() {
+    void repeatedDeclarationsKeepTotalBrokerQueuesBoundedByLadderSize() {
         for (int i = 1; i <= 50; i++) {
             scheduler.schedule(ReservationDeadlineKind.APPROVAL, (long) i, FIXED_NOW.plusSeconds(15 + i));
         }
 
-        // 15s..65s spans only the 15_000ms and 60_000ms buckets -> at most 2 declareQueue RPCs total.
-        assertThat(amqpAdmin.declaredQueues).hasSize(2);
+        // The declaration is idempotent: 50 publishes still use only two broker queues.
+        assertThat(amqpAdmin.declaredQueues).hasSize(50);
         assertThat(amqpAdmin.byName.keySet()).containsExactlyInAnyOrder(
                 topology.bucketQueueName(15_000L),
                 topology.bucketQueueName(60_000L));
         assertThat(rabbitTemplate.sends).hasSize(50);
+    }
+
+    @Test
+    void redeclaresBucketAfterBrokerLosesQueueWhileSchedulerRemainsAlive() {
+        Instant deadline = FIXED_NOW.plusSeconds(900);
+        String bucket = topology.bucketQueueName(900_000L);
+        scheduler.schedule(ReservationDeadlineKind.APPROVAL, 1L, deadline);
+        amqpAdmin.byName.clear(); // simulate loss of broker topology
+        scheduler.schedule(ReservationDeadlineKind.APPROVAL, 2L, deadline);
+        assertThat(amqpAdmin.byName).containsKey(bucket);
+        assertThat(amqpAdmin.declaredQueues).hasSize(2);
+        assertThat(rabbitTemplate.sends.getLast().routingKey()).isEqualTo(bucket);
     }
 
     @Test
@@ -153,8 +165,9 @@ class RabbitReservationExpirySchedulerTest {
         scheduler.schedule(ReservationDeadlineKind.APPROVAL, 8L, deadline);
         scheduler.schedule(ReservationDeadlineKind.PAYMENT, 8L, deadline);
 
-        // Both land in the same O(1) 300_000ms bucket, declared once.
-        assertThat(amqpAdmin.declaredQueues).hasSize(1);
+        // Both land in the same O(1) 300_000ms bucket; redeclaration is idempotent.
+        assertThat(amqpAdmin.declaredQueues).hasSize(2);
+        assertThat(amqpAdmin.byName).hasSize(1);
         assertThat(amqpAdmin.declaredQueues.get(0).getName()).isEqualTo(topology.bucketQueueName(300_000L));
 
         assertThat(rabbitTemplate.sends.get(0).body()).isEqualTo("8@" + deadline.toEpochMilli());

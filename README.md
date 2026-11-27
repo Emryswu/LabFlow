@@ -78,7 +78,7 @@ ReservationApplicationService.create
          └─ insert
 ```
 
-本地默认 `labops.reservation-lock.mode=local`（进程内公平锁）；按预约半开区间 `[startTime, endTime)` 切分为升序 UTC 日期槽 `equipment:{id}:day:{epochDay}` 加锁并逆序释放，同设备不同日期的预约完全并行互不阻塞。production 切 Redis：`SET NX PX` 抢锁（`labops:reservation:equipment:{id}:day:{epochDay}`），配合指数退避与随机抖动轮询缓解惊群，Lua 比对 token 再 `DEL`，Redis 挂了直接 503，不降级成无锁。
+本地默认 `labops.reservation-lock.mode=local`（进程内公平锁）；按预约半开区间 `[startTime, endTime)` 切分为升序 UTC 日期槽 `equipment:{id}:day:{epochDay}` 加锁并逆序释放，同设备不同日期的预约不再争用同一应用层设备锁，但写事务仍通过设备行锁串行执行，以保护设备状态和时段冲突判断。production 切 Redis：`SET NX PX` 抢锁（`labops:reservation:equipment:{id}:day:{epochDay}`），配合指数退避与随机抖动轮询缓解惊群，Lua 比对 token 再 `DEL`，Redis 挂了直接 503，不降级成无锁。
 
 状态变更（审批 / 取消 / 完成 / 过期 / 报修联动）固定 **Equipment → Reservation** 行锁，避免和创建路径形成 ABBA。创建路径是 **User → Equipment**，全项目没有反过来先锁设备再锁用户。
 
@@ -106,7 +106,7 @@ ReservationApplicationService.create
 
 production：`labops.reservation-expiry.mode=rabbit`。
 
-1. 审批截止时间取「创建时间 + 审批时限」与预约结束时间的较早者；采用 **O(1) 固定阶梯分桶延迟队列**（默认 9 档：`100ms, 500ms, 1s, 5s, 15s, 60s, 300s, 900s, 3600s`），队列名 `{delayQueuePrefix}bucket.{bucketMs}ms`，进程内 `ConcurrentHashMap.newKeySet()` 缓存已声明的桶队列，避免每条预约建删队列带来的 `O(N)` 元数据膨胀
+1. 审批截止时间取「创建时间 + 审批时限」与预约结束时间的较早者；采用 **O(1) 固定阶梯分桶延迟队列**（默认 9 档：`100ms, 500ms, 1s, 5s, 15s, 60s, 300s, 900s, 3600s`），队列名 `{delayQueuePrefix}bucket.{bucketMs}ms`，发送前幂等声明目标桶，避免 Broker 丢失队列后进程内缓存误判；队列数量仍为 O(1)，每次投递增加一次声明 RPC
 2. 每个固定桶队列仅设均匀队列级 `x-message-ttl` + DLX，同桶 TTL 完全一致（无 FIFO 队头阻塞），到期进入共享工作队列
 3. 消息体携带目标截止毫秒时间戳（`123@1732600000000` / `PAYMENT:123@1732600000000`），同时向后兼容不带 `@` 的历史裸格式（视为立即到期）；非法 payload 记 warning 后 ack 丢掉
 4. 监听器消费时若 `now < deadline`，先无锁查库判断预约是否仍在等待该截止（Lazy Disarm：已审批/已支付/已取消/不存在直接静默丢弃），仍在等待则级联重投进下一级更细的阶梯桶，直至 `now >= deadline` 再执行过期
