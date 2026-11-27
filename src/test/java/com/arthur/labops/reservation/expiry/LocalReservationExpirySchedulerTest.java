@@ -1,12 +1,14 @@
 package com.arthur.labops.reservation.expiry;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
@@ -94,6 +96,76 @@ class LocalReservationExpirySchedulerTest {
         assertThat(scheduler.armedCount())
                 .as("a deadline that already fired must not stay in the map either")
                 .isZero();
+    }
+
+    @Test
+    void pastDeadlineFiresImmediatelyWithoutLeakingArmedSlot() throws Exception {
+        CountDownLatch fired = new CountDownLatch(1);
+        LocalReservationExpiryScheduler directScheduler = new LocalReservationExpiryScheduler(
+                taskScheduler,
+                new ReservationDeadlineHandler(null, null) {
+                    @Override
+                    public boolean fire(ReservationDeadlineKind kind, Long reservationId) {
+                        fired.countDown();
+                        return true;
+                    }
+                });
+
+        directScheduler.schedule(ReservationDeadlineKind.APPROVAL, 42L, Instant.now().minusSeconds(5));
+        assertThat(fired.await(2, TimeUnit.SECONDS)).isTrue();
+        TimeUnit.MILLISECONDS.sleep(50);
+        assertThat(directScheduler.armedCount()).isZero();
+    }
+
+    @Test
+    void reschedulingWhilePreviousTaskIsRunningDoesNotEvictNewSlot() throws Exception {
+        CountDownLatch firstEntered = new CountDownLatch(1);
+        CountDownLatch allowFirstFinish = new CountDownLatch(1);
+        LocalReservationExpiryScheduler racingScheduler = new LocalReservationExpiryScheduler(
+                taskScheduler,
+                new ReservationDeadlineHandler(null, null) {
+                    @Override
+                    public boolean fire(ReservationDeadlineKind kind, Long reservationId) {
+                        firstEntered.countDown();
+                        try {
+                            allowFirstFinish.await(3, TimeUnit.SECONDS);
+                        } catch (InterruptedException ignored) {
+                            Thread.currentThread().interrupt();
+                        }
+                        return true;
+                    }
+                });
+
+        racingScheduler.schedule(ReservationDeadlineKind.APPROVAL, 99L, Instant.now().minusSeconds(1));
+        assertThat(firstEntered.await(2, TimeUnit.SECONDS)).isTrue();
+
+        Instant nextDeadline = Instant.now().plus(Duration.ofMinutes(10));
+        racingScheduler.schedule(ReservationDeadlineKind.APPROVAL, 99L, nextDeadline);
+        assertThat(racingScheduler.armedCount()).isEqualTo(1);
+
+        allowFirstFinish.countDown();
+        TimeUnit.MILLISECONDS.sleep(100);
+
+        assertThat(racingScheduler.armedCount())
+                .as("old task cleanup must not remove the newly scheduled entry")
+                .isEqualTo(1);
+        racingScheduler.cancel(ReservationDeadlineKind.APPROVAL, 99L, nextDeadline);
+        assertThat(racingScheduler.armedCount()).isZero();
+    }
+
+    @Test
+    void scheduleAndCancelRejectNullArguments() {
+        Instant deadline = Instant.now().plusSeconds(60);
+        assertThatThrownBy(() -> scheduler.schedule(null, 1L, deadline))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> scheduler.schedule(ReservationDeadlineKind.APPROVAL, null, deadline))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> scheduler.schedule(ReservationDeadlineKind.APPROVAL, 1L, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> scheduler.cancel(null, 1L, deadline))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> scheduler.cancel(ReservationDeadlineKind.APPROVAL, null, deadline))
+                .isInstanceOf(NullPointerException.class);
     }
 
     private static final class RecordingDeadlineHandler extends ReservationDeadlineHandler {

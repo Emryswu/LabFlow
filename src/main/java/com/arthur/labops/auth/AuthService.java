@@ -3,6 +3,7 @@ package com.arthur.labops.auth;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,22 +72,12 @@ public class AuthService {
 
     public IssuedAuthSession refresh(String rawRefreshToken) {
         String raw = requireRefreshToken(rawRefreshToken);
-        try {
-            return mapOutcome(authRefreshTx.refreshInTx(raw));
-        } catch (RuntimeException exception) {
-            if (!isLockFailure(exception)) {
-                throw exception;
-            }
-            log.info("refresh lock conflict, retrying once");
-            try {
-                return mapOutcome(authRefreshTx.refreshInTx(raw));
-            } catch (RuntimeException retry) {
-                if (!isLockFailure(retry)) {
-                    throw retry;
-                }
-                return mapOutcome(terminateAfterLockFailure(raw));
-            }
-        }
+        return mapOutcome(retryOnceOnLockFailure(
+                () -> authRefreshTx.refreshInTx(raw),
+                () -> {
+                    log.info("refresh lock conflict, retrying once");
+                },
+                () -> terminateAfterLockFailure(raw)));
     }
 
     public void logout(String rawRefreshToken) {
@@ -94,36 +85,37 @@ public class AuthService {
             return;
         }
         String raw = rawRefreshToken.trim();
+        retryOnceOnLockFailure(
+                () -> {
+                    authRefreshTx.logoutInTx(raw);
+                    return null;
+                },
+                () -> {},
+                () -> null);
+    }
+
+    private RefreshOutcome terminateAfterLockFailure(String raw) {
+        return retryOnceOnLockFailure(
+                () -> authRefreshTx.terminateLiveFamilyInTx(raw),
+                () -> {},
+                RefreshOutcome::invalid);
+    }
+
+    private <T> T retryOnceOnLockFailure(Supplier<T> action, Runnable beforeRetry, Supplier<T> onExhausted) {
         try {
-            authRefreshTx.logoutInTx(raw);
+            return action.get();
         } catch (RuntimeException exception) {
             if (!isLockFailure(exception)) {
                 throw exception;
             }
+            beforeRetry.run();
             try {
-                authRefreshTx.logoutInTx(raw);
+                return action.get();
             } catch (RuntimeException retry) {
                 if (!isLockFailure(retry)) {
                     throw retry;
                 }
-            }
-        }
-    }
-
-    private RefreshOutcome terminateAfterLockFailure(String raw) {
-        try {
-            return authRefreshTx.terminateLiveFamilyInTx(raw);
-        } catch (RuntimeException exception) {
-            if (!isLockFailure(exception)) {
-                throw exception;
-            }
-            try {
-                return authRefreshTx.terminateLiveFamilyInTx(raw);
-            } catch (RuntimeException retry) {
-                if (isLockFailure(retry)) {
-                    return RefreshOutcome.invalid();
-                }
-                throw retry;
+                return onExhausted.get();
             }
         }
     }

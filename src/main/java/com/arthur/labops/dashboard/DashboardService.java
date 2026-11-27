@@ -6,6 +6,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,9 +65,7 @@ public class DashboardService {
         LocalDate today = LocalDate.now(zone);
         Instant dayStart = today.atStartOfDay(zone).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
-        EnumSet<WorkOrderStatus> openStatuses = EnumSet.of(
-                WorkOrderStatus.SUBMITTED, WorkOrderStatus.ASSIGNED,
-                WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.RESOLVED);
+        Set<WorkOrderStatus> openStatuses = WorkOrderStatus.ACTIVE;
         EnumSet<WorkOrderStatus> inProgressStatuses = EnumSet.of(
                 WorkOrderStatus.ASSIGNED, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.RESOLVED);
         EnumSet<WorkOrderPriority> highPriorities = EnumSet.of(

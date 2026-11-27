@@ -211,6 +211,25 @@ class RedisLoginAttemptGuardTest {
         assertRateLimited(b, "203.0.113.10", "student");
     }
 
+    @Test
+    void handlesNullUsernameAndRejectsInvalidConstructorConfig() {
+        InMemoryRedisCommands commands = new InMemoryRedisCommands();
+        Clock clock = Clock.fixed(Instant.parse("2026-11-26T10:00:00Z"), ZoneOffset.UTC);
+        RedisLoginAttemptGuard guard = new RedisLoginAttemptGuard(commands, 2, 5, Duration.ofMinutes(1), clock);
+        assertThatCode(() -> fail(guard, null, null)).doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> new RedisLoginAttemptGuard(commands, 0, 5, Duration.ofMinutes(1), clock))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RedisLoginAttemptGuard(commands, 2, 0, Duration.ofMinutes(1), clock))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RedisLoginAttemptGuard(commands, 2, 5, Duration.ZERO, clock))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RedisLoginAttemptGuard(commands, 2, 5, Duration.ofMinutes(1), null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RedisLoginAttemptGuard((RedisLoginAttemptGuard.Commands) null, 2, 5, Duration.ofMinutes(1), clock))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     private static void fail(LoginAttemptThrottle guard, String ip, String username) {
         String attempt = guard.beginAttempt(ip, username);
         guard.recordFailure(ip, username, attempt);

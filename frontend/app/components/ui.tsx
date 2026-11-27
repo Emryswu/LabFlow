@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { statusLabels } from "../lib/labels";
 import type { ToastState } from "../lib/types";
 import { Icon } from "./icons";
@@ -21,6 +21,19 @@ export function StatusBadge({ value }: { value: string }) {
 }
 
 export function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="modal" role="dialog" aria-modal="true" aria-label={title}>
       <header>
@@ -38,7 +51,7 @@ export function Empty({ text }: { text: string }) {
 
 export function Toast({ toast }: { toast: ToastState }) {
   if (!toast) return null;
-  return <div className={`toast ${toast.error ? "error" : ""}`}>
+  return <div className={`toast ${toast.error ? "error" : ""}`} role={toast.error ? "alert" : "status"} aria-live={toast.error ? "assertive" : "polite"}>
     <span>{toast.error ? "!" : "✓"}</span>{toast.message}
   </div>;
 }

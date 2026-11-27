@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
-import type { Equipment, EquipmentForm, ModalKind, PageData, ReservationForm, WorkOrderForm } from "../lib/types";
-import { isReservableStatus } from "../lib/labels";
+import { formatCurrencyCents, isReservableStatus } from "../lib/labels";
+import type { Equipment, EquipmentForm, ModalKind, PageData, PaymentOrder, ReservationForm, WorkOrderForm, WorkOrderPriority } from "../lib/types";
 import { Modal } from "./ui";
 
 export function ActionModals({ modal, busy, equipment, equipmentForm, reservationForm, workorderForm, onClose, onEquipmentChange, onReservationChange, onWorkorderChange, onSubmitEquipment, onSubmitReservation, onSubmitWorkorder }: {
@@ -42,7 +42,7 @@ export function ActionModals({ modal, busy, equipment, equipmentForm, reservatio
 
   if (modal === "workorder") return <Modal title="提交故障工单" subtitle="报修后设备将自动进入维护状态" onClose={onClose}>
     <form className="modal-form" onSubmit={onSubmitWorkorder}>
-      <div className="field-grid"><label>故障设备<select value={workorderForm.equipmentId} onChange={(e) => onWorkorderChange({ ...workorderForm, equipmentId: e.target.value })} required><option value="">请选择设备</option>{equipment?.content.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.code}</option>)}</select></label><label>优先级<select value={workorderForm.priority} onChange={(e) => onWorkorderChange({ ...workorderForm, priority: e.target.value })}><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option><option value="URGENT">紧急</option></select></label></div>
+      <div className="field-grid"><label>故障设备<select value={workorderForm.equipmentId} onChange={(e) => onWorkorderChange({ ...workorderForm, equipmentId: e.target.value })} required><option value="">请选择设备</option>{equipment?.content.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.code}</option>)}</select></label><label>优先级<select value={workorderForm.priority} onChange={(e) => onWorkorderChange({ ...workorderForm, priority: e.target.value as WorkOrderPriority })}><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option><option value="URGENT">紧急</option></select></label></div>
       <label>故障标题<input value={workorderForm.title} onChange={(e) => onWorkorderChange({ ...workorderForm, title: e.target.value })} placeholder="简要描述故障现象" required /></label>
       <label>详细描述<textarea value={workorderForm.description} onChange={(e) => onWorkorderChange({ ...workorderForm, description: e.target.value })} placeholder="发生时间、异常表现、已尝试的处理方式…" required /></label>
       <footer><button type="button" className="secondary" onClick={onClose}>取消</button><button className="primary" disabled={busy}>提交工单</button></footer>
@@ -50,4 +50,40 @@ export function ActionModals({ modal, busy, equipment, equipmentForm, reservatio
   </Modal>;
 
   return null;
+}
+
+export type OrderDialogState = { kind: "pay" | "refund"; order: PaymentOrder };
+
+export function PaymentOrderModal({ dialog, busy, onClose, onPay, onConfirmCancel }: {
+  dialog: OrderDialogState | null;
+  busy: boolean;
+  onClose: () => void;
+  onPay: (order: PaymentOrder) => void;
+  onConfirmCancel: (reservationId: number) => void;
+}) {
+  if (!dialog) return null;
+  const refundableCents = Math.max(0, dialog.order.paidCents - dialog.order.refundedCents);
+  const needsRefund = dialog.kind === "refund" && refundableCents > 0 && dialog.order.status !== "REFUNDED";
+
+  return <Modal
+    title={dialog.kind === "pay" ? "预约付款" : "取消已支付预约"}
+    subtitle={`预约 #${dialog.order.reservationId} · 订单 ${dialog.order.orderNo}`}
+    onClose={() => { if (!busy) onClose(); }}
+  >
+    <div className="modal-form">
+      {dialog.kind === "pay"
+        ? <p>应付金额：{formatCurrencyCents(dialog.order.amountCents)}</p>
+        : needsRefund
+          ? <p>确认取消此预约？取消后将全额退款 {formatCurrencyCents(refundableCents)}，退款到账后预约显示为已取消。</p>
+          : <p>该订单已完成全额退款，无剩余可退金额。确认直接取消此预约？</p>}
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={onClose}>
+          {dialog.kind === "pay" ? "返回" : "暂不取消"}
+        </button>
+        {dialog.kind === "pay"
+          ? <button type="button" className="primary" data-action="confirm-pay" disabled={busy || dialog.order.status !== "AWAITING_PAYMENT"} onClick={() => onPay(dialog.order)}>{busy ? "提交中…" : "确认付款"}</button>
+          : <button type="button" className="primary" data-action="confirm-refund" disabled={busy} onClick={() => onConfirmCancel(dialog.order.reservationId)}>{busy ? "提交中…" : (needsRefund ? "确认取消并退款" : "确认取消")}</button>}
+      </footer>
+    </div>
+  </Modal>;
 }

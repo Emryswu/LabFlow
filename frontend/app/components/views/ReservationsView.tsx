@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { EquipmentCell, menuEntries, MoreMenu, StateBadge } from "../table";
 import { conflictSummary } from "../../lib/conflicts";
-import { formatDate } from "../../lib/labels";
+import { formatClockMinutes, formatDate, indexById } from "../../lib/labels";
 import { buildWeekSchedule, type ScheduleBlock } from "../../lib/schedule";
 import type { Equipment, PageData, Reservation, UserProfile } from "../../lib/types";
 import { Empty } from "../ui";
@@ -10,19 +10,23 @@ import { Icon } from "../icons";
 /** Tall hours when the day is short; a full 24-hour day shrinks so the week stays on screen. */
 const hourHeight = (hours: number) => Math.max(28, Math.min(44, Math.round(600 / hours)));
 
-const clock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-
 const kindLabels: Record<ScheduleBlock["kind"], string> = { pending: "待审批", occupied: "已占用", done: "已完成" };
 
-function ReservationSchedule({ schedule, equipment, now }: { schedule: Reservation[] | null; equipment: Equipment[]; now: Date }) {
+function ReservationSchedule({ schedule, equipmentById, equipment, now }: {
+  schedule: Reservation[] | null;
+  equipmentById: Map<number, Equipment>;
+  equipment: Equipment[];
+  now: Date;
+}) {
   const [equipmentId, setEquipmentId] = useState("");
-  const all = schedule ?? [];
-  const visible = equipmentId ? all.filter((item) => String(item.equipmentId) === equipmentId) : all;
-  const week = buildWeekSchedule(visible, now);
+  const week = useMemo(() => {
+    const all = schedule ?? [];
+    const visible = equipmentId ? all.filter((item) => String(item.equipmentId) === equipmentId) : all;
+    return buildWeekSchedule(visible, now);
+  }, [schedule, equipmentId, now]);
   const [fromHour, toHour] = week.hours;
   const hourPx = hourHeight(toHour - fromHour);
   const height = (toHour - fromHour) * hourPx;
-  const equipmentById = new Map(equipment.map((item) => [item.id, item]));
   const nowMinute = now.getHours() * 60 + now.getMinutes();
   const top = (minute: number) => ((Math.max(minute, fromHour * 60) - fromHour * 60) / 60) * hourPx;
 
@@ -49,7 +53,7 @@ function ReservationSchedule({ schedule, equipment, now }: { schedule: Reservati
             <span>{day.getMonth() + 1}/{day.getDate()}</span>
           </div>)}
           <div className="week-hours" aria-hidden="true">
-            {Array.from({ length: toHour - fromHour }, (_, index) => <span key={index} style={{ top: index * hourPx }}>{clock((fromHour + index) * 60)}</span>)}
+            {Array.from({ length: toHour - fromHour }, (_, index) => <span key={index} style={{ top: index * hourPx }}>{formatClockMinutes((fromHour + index) * 60)}</span>)}
           </div>
           {week.days.map((day, dayIndex) => <div key={day.toISOString()} className={`week-day ${dayIndex === 0 ? "today" : ""}`}>
             {dayIndex === 0 && nowMinute >= fromHour * 60 && nowMinute < toHour * 60
@@ -58,7 +62,7 @@ function ReservationSchedule({ schedule, equipment, now }: { schedule: Reservati
               const item = block.reservation;
               const device = equipmentById.get(item.equipmentId);
               const conflict = conflictSummary(item);
-              const time = `${block.continuesBefore ? "…" : ""}${clock(block.startMinute)}–${clock(block.endMinute)}${block.continuesAfter ? "…" : ""}`;
+              const time = `${block.continuesBefore ? "…" : ""}${formatClockMinutes(block.startMinute)}–${formatClockMinutes(block.endMinute)}${block.continuesAfter ? "…" : ""}`;
               const title = [`${time} ${device?.name ?? `设备 #${item.equipmentId}`}`, `${kindLabels[block.kind]} · ${item.requesterName}`, item.purpose, conflict?.detail]
                 .filter(Boolean).join("\n");
               return <div
@@ -100,8 +104,11 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
   onComplete: (id: number) => void;
 }) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
-  const equipmentList = equipment?.content ?? [];
-  const equipmentById = new Map(equipmentList.map((item) => [item.id, item]));
+  const equipmentList = useMemo(() => equipment?.content ?? [], [equipment]);
+  const equipmentById = useMemo(() => indexById(equipmentList), [equipmentList]);
+  // Recompute the 7-day anchor when the schedule dataset refreshes, not on UI toggles like menuFor.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const scheduleNow = useMemo(() => new Date(), [scheduleReservations]);
   return <div className="view-stack">
     <section className="toolbar">
       <select value={filter} onChange={(e) => onFilterChange(e.target.value)}>
@@ -113,7 +120,7 @@ export function ReservationsView({ user, reservations, scheduleReservations, equ
       <div className="spacer"></div>
       <button className="primary" onClick={onCreate}><Icon name="plus" size={16} />发起预约</button>
     </section>
-    <ReservationSchedule schedule={scheduleReservations} equipment={equipmentList} now={new Date()} />
+    <ReservationSchedule schedule={scheduleReservations} equipmentById={equipmentById} equipment={equipmentList} now={scheduleNow} />
     <section className="panel table-panel">
       <header><h3>预约记录</h3><small>共 {reservations?.totalElements ?? 0} 条</small></header>
       {Boolean(reservations?.content.length) && <div className="table-scroll"><table className="list-table">

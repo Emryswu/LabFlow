@@ -56,17 +56,72 @@ export function readableDetails(details: string) {
   return details.replace(/\b[A-Z][A-Z_]+\b/g, (code) => statusLabels[code] ?? code);
 }
 
-export const formatDate = (value?: string | null) => value
-  ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value))
-  : "—";
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
+function parseValidDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatClock(date: Date): string {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+export function formatClockMinutes(minutes: number): string {
+  return `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
+}
+
+export const formatDate = (value?: string | null) => {
+  const date = parseValidDate(value);
+  return date
+    ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date)
+    : "—";
+};
 
 export function formatDateRange(start: string, end: string, dayLabel = (date: Date) => `${date.getMonth() + 1}月${date.getDate()}日`) {
-  const from = new Date(start);
-  const to = new Date(end);
-  const clock = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const from = parseValidDate(start);
+  const to = parseValidDate(end);
+  if (!from || !to) return "—";
   const sameDay = from.getFullYear() === to.getFullYear()
     && from.getMonth() === to.getMonth()
     && from.getDate() === to.getDate();
-  return `${dayLabel(from)} ${clock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${clock(to)}`;
+  return `${dayLabel(from)} ${formatClock(from)}–${sameDay ? "" : `${dayLabel(to)} `}${formatClock(to)}`;
+}
+
+export function relativeDayLabel(date: Date): string {
+  const today = new Date();
+  const startOf = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+  const diff = Math.round((startOf(date) - startOf(today)) / 86_400_000);
+  if (diff === 0) return "今天";
+  if (diff === 1) return "明天";
+  if (diff === -1) return "昨天";
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+export function formatRelativeMoment(value: string): string {
+  const date = parseValidDate(value);
+  return date ? `${relativeDayLabel(date)} ${formatClock(date)}` : "—";
+}
+
+export function splitDateTime(value: string): { day: string; time: string } {
+  const date = parseValidDate(value);
+  if (!date) return { day: "—", time: "" };
+  return {
+    day: `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`,
+    time: `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`,
+  };
+}
+
+export function formatCurrencyCents(cents: number): string {
+  return `¥${(cents / 100).toFixed(2)}`;
+}
+
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+export function indexById<T extends { id: number }>(items: readonly T[] | null | undefined): Map<number, T> {
+  return new Map((items ?? []).map((item) => [item.id, item]));
 }
 

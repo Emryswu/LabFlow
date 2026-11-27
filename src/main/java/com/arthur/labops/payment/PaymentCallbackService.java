@@ -84,47 +84,71 @@ public class PaymentCallbackService {
 
     private PaymentCallbackResult handleInTransaction(PaymentCallbackRequest request,
                                                        PaymentOrderRepository.Routing routing) {
+        LockedTargets locked = lockTargets(request.orderNo(), routing);
+        PaymentOrder order = locked.order();
 
+        if (!request.succeeded()) {
+            return handleUnsuccessfulCallback(request, order);
+        }
+        if (isReplay(request)) {
+            return new PaymentCallbackResult(request.orderNo(), false, order.getStatus());
+        }
+        if (!amountIsCoherent(request, order)) {
+            return rejectOnAmountMismatch(request, order);
+        }
+
+        recordTransaction(request);
+        applyToLedgerAndReservation(request, order, locked.reservation(), Instant.now());
+        equipmentStatusService.sync(order.getEquipmentId());
+
+        log.info("Payment callback recorded orderNo={} type={} amountCents={} orderStatus={}",
+                request.orderNo(), request.type(), request.amountCents(), order.getStatus());
+        return new PaymentCallbackResult(request.orderNo(), true, order.getStatus());
+    }
+
+    private LockedTargets lockTargets(String orderNo, PaymentOrderRepository.Routing routing) {
         equipmentRepository.findByIdForUpdate(routing.getEquipmentId());
         Reservation reservation = reservationRepository.findByIdForUpdate(routing.getReservationId())
                 .orElseThrow(() -> new BusinessException(
                         "RESERVATION_NOT_FOUND", "预约不存在", HttpStatus.NOT_FOUND));
-        PaymentOrder order = orderRepository.findByOrderNoForUpdate(request.orderNo())
+        PaymentOrder order = orderRepository.findByOrderNoForUpdate(orderNo)
                 .orElseThrow(() -> new BusinessException(
                         "PAYMENT_ORDER_NOT_FOUND", "支付订单不存在", HttpStatus.NOT_FOUND));
+        return new LockedTargets(reservation, order);
+    }
 
-        if (!request.succeeded()) {
-            auditLogService.recordSystem("PAYMENT_CALLBACK_UNSUCCESSFUL", "RESERVATION",
-                    order.getReservationId(),
-                    "渠道回调状态为 " + request.status() + "，订单号 " + request.orderNo() + "，不计入流水");
-            log.info("Payment callback ignored, channel status={} orderNo={} attemptKey={}",
-                    request.status(), request.orderNo(), request.idempotencyKey());
-            reopenRejectedRequest(request);
-            return new PaymentCallbackResult(request.orderNo(), false, order.getStatus());
-        }
+    private PaymentCallbackResult handleUnsuccessfulCallback(PaymentCallbackRequest request, PaymentOrder order) {
+        auditLogService.recordSystem("PAYMENT_CALLBACK_UNSUCCESSFUL", "RESERVATION",
+                order.getReservationId(),
+                "渠道回调状态为 " + request.status() + "，订单号 " + request.orderNo() + "，不计入流水");
+        log.info("Payment callback ignored, channel status={} orderNo={} attemptKey={}",
+                request.status(), request.orderNo(), request.idempotencyKey());
+        reopenRejectedRequest(request);
+        return new PaymentCallbackResult(request.orderNo(), false, order.getStatus());
+    }
 
-        // The routing projection was read before this transaction began, so this
-        // is its first consistent read. All locking reads above have already
-        // finished waiting, and this snapshot includes the previous callback's
-        // ledger insert. Keeping this read non-locking also avoids next-key locks
-        // for absent keys, which could deadlock first callbacks for other orders.
+    private boolean isReplay(PaymentCallbackRequest request) {
+        // Non-locking read after acquiring row locks avoids next-key locks for absent keys.
         if (transactionRepository.findByIdempotencyKey(request.idempotencyKey()).isPresent()) {
             log.info("Payment callback ignored as replay orderNo={} idempotencyKey={}",
                     request.orderNo(), request.idempotencyKey());
-            return new PaymentCallbackResult(request.orderNo(), false, order.getStatus());
+            return true;
         }
+        return false;
+    }
 
-        if (!amountIsCoherent(request, order)) {
-            auditLogService.recordSystem("PAYMENT_CALLBACK_AMOUNT_REJECTED", "RESERVATION",
-                    order.getReservationId(),
-                    "渠道回调金额 " + request.amountCents() + " 分与订单不符（" + request.type()
-                            + "，订单号 " + request.orderNo() + "，待付 " + order.outstandingCents()
-                            + " 分，可退 " + order.refundableCents() + " 分），不计入流水");
-            log.warn("Payment callback rejected on amount orderNo={} type={} amountCents={}",
-                    request.orderNo(), request.type(), request.amountCents());
-            return new PaymentCallbackResult(request.orderNo(), false, order.getStatus());
-        }
+    private PaymentCallbackResult rejectOnAmountMismatch(PaymentCallbackRequest request, PaymentOrder order) {
+        auditLogService.recordSystem("PAYMENT_CALLBACK_AMOUNT_REJECTED", "RESERVATION",
+                order.getReservationId(),
+                "渠道回调金额 " + request.amountCents() + " 分与订单不符（" + request.type()
+                        + "，订单号 " + request.orderNo() + "，待付 " + order.outstandingCents()
+                        + " 分，可退 " + order.refundableCents() + " 分），不计入流水");
+        log.warn("Payment callback rejected on amount orderNo={} type={} amountCents={}",
+                request.orderNo(), request.type(), request.amountCents());
+        return new PaymentCallbackResult(request.orderNo(), false, order.getStatus());
+    }
 
+    private void recordTransaction(PaymentCallbackRequest request) {
         transactionRepository.saveAndFlush(new PaymentTransaction(
                 request.orderNo(),
                 request.idempotencyKey(),
@@ -133,13 +157,6 @@ public class PaymentCallbackService {
                 request.channelTxnId(),
                 request.status(),
                 request.occurredAt()));
-
-        applyToLedgerAndReservation(request, order, reservation);
-        equipmentStatusService.sync(order.getEquipmentId());
-
-        log.info("Payment callback recorded orderNo={} type={} amountCents={} orderStatus={}",
-                request.orderNo(), request.type(), request.amountCents(), order.getStatus());
-        return new PaymentCallbackResult(request.orderNo(), true, order.getStatus());
     }
 
     private boolean amountIsCoherent(PaymentCallbackRequest request, PaymentOrder order) {
@@ -170,11 +187,7 @@ public class PaymentCallbackService {
      * work-order insert needs that same row for its foreign-key check.
      */
     private void reopenRejectedRequest(PaymentCallbackRequest request) {
-        PaymentRequest outbound = requestRepository.findByOrderNoForUpdateOrderByIdAsc(request.orderNo()).stream()
-                .filter(candidate -> candidate.getType() == request.type())
-                .filter(candidate -> candidate.matchesChannelKey(request.idempotencyKey()))
-                .findFirst()
-                .orElse(null);
+        PaymentRequest outbound = findMatchingOutboundRequest(request);
         if (outbound == null) {
             log.info("Ignoring stale or unowned channel rejection orderNo={} callbackKey={}",
                     request.orderNo(), request.idempotencyKey());
@@ -191,36 +204,55 @@ public class PaymentCallbackService {
         }
     }
 
+    private PaymentRequest findMatchingOutboundRequest(PaymentCallbackRequest request) {
+        return requestRepository.findByOrderNoForUpdateOrderByIdAsc(request.orderNo()).stream()
+                .filter(candidate -> candidate.getType() == request.type())
+                .filter(candidate -> candidate.matchesChannelKey(request.idempotencyKey()))
+                .findFirst()
+                .orElse(null);
+    }
+
     private void applyToLedgerAndReservation(PaymentCallbackRequest request,
                                              PaymentOrder order,
-                                             Reservation reservation) {
+                                             Reservation reservation,
+                                             Instant now) {
         if (request.type() == PaymentTransactionType.PAYMENT) {
-            if (order.getStatus() == PaymentOrderStatus.CLOSED) {
-                applyLatePayment(request, order, reservation);
-                return;
-            }
-            Instant paymentDeadline = reservation.getPaymentDeadline();
-            order.applyPayment(request.amountCents());
-            if (reservation.getStatus() == ReservationStatus.AWAITING_PAYMENT) {
-                reservation.markPaid();
-                eventPublisher.publishEvent(ReservationDeadlineEvent.disarm(
-                        ReservationDeadlineKind.PAYMENT, reservation.getId(), paymentDeadline));
-            }
-            auditLogService.recordSystem("PAYMENT_SUCCEEDED", "RESERVATION", reservation.getId(),
-                    "支付成功 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
+            applyPayment(request, order, reservation);
         } else {
-            order.applyRefund(request.amountCents());
-            // The entity owns cancellation eligibility. Pass processing time rather
-            // than occurredAt; all three rows are already locked.
-            if (order.getStatus() == PaymentOrderStatus.REFUNDED) {
-                if (reservation.cancelOnFullRefundIfNotStarted(Instant.now())) {
-                    auditLogService.recordSystem("RESERVATION_CANCELLED", "RESERVATION", reservation.getId(),
-                            "渠道全额退款到账，自动取消预约 订单号 " + order.getOrderNo());
-                }
-            }
-            auditLogService.recordSystem("REFUND_SUCCEEDED", "RESERVATION", reservation.getId(),
-                    "退款到账 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
+            applyRefund(request, order, reservation, now);
         }
+    }
+
+    private void applyPayment(PaymentCallbackRequest request, PaymentOrder order, Reservation reservation) {
+        if (order.getStatus() == PaymentOrderStatus.CLOSED) {
+            applyLatePayment(request, order, reservation);
+            return;
+        }
+        Instant paymentDeadline = reservation.getPaymentDeadline();
+        order.applyPayment(request.amountCents());
+        if (reservation.getStatus() == ReservationStatus.AWAITING_PAYMENT) {
+            reservation.markPaid();
+            eventPublisher.publishEvent(ReservationDeadlineEvent.disarm(
+                    ReservationDeadlineKind.PAYMENT, reservation.getId(), paymentDeadline));
+        }
+        auditLogService.recordSystem("PAYMENT_SUCCEEDED", "RESERVATION", reservation.getId(),
+                "支付成功 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
+    }
+
+    private void applyRefund(PaymentCallbackRequest request,
+                             PaymentOrder order,
+                             Reservation reservation,
+                             Instant now) {
+        order.applyRefund(request.amountCents());
+        // The entity owns cancellation eligibility. Pass processing time rather
+        // than occurredAt; all three rows are already locked.
+        if (order.getStatus() == PaymentOrderStatus.REFUNDED
+                && reservation.cancelOnFullRefundIfNotStarted(now)) {
+            auditLogService.recordSystem("RESERVATION_CANCELLED", "RESERVATION", reservation.getId(),
+                    "渠道全额退款到账，自动取消预约 订单号 " + order.getOrderNo());
+        }
+        auditLogService.recordSystem("REFUND_SUCCEEDED", "RESERVATION", reservation.getId(),
+                "退款到账 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents() + " 分");
     }
 
     private void applyLatePayment(PaymentCallbackRequest request, PaymentOrder order, Reservation reservation) {
@@ -233,5 +265,8 @@ public class PaymentCallbackService {
         auditLogService.recordSystem("PAYMENT_ARRIVED_LATE", "RESERVATION", reservation.getId(),
                 "支付在窗口关闭后到账 订单号 " + order.getOrderNo() + "，金额 " + request.amountCents()
                         + " 分，已发起补偿退款");
+    }
+
+    private record LockedTargets(Reservation reservation, PaymentOrder order) {
     }
 }

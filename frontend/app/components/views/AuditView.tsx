@@ -1,5 +1,5 @@
 import {
-  type ActionDomain, actionDomain, actionDomainLabels, actionLabels, actorRoleLabels, readableDetails, targetTypeLabels,
+  type ActionDomain, actionDomain, actionDomainLabels, actionLabels, actorRoleLabels, readableDetails, splitDateTime, targetTypeLabels,
 } from "../../lib/labels";
 import type { AuditLog, PageData } from "../../lib/types";
 import { type CategoryTone, Icon, type IconName } from "../icons";
@@ -24,15 +24,6 @@ const ACTION_GROUPS = (Object.keys(actionDomainLabels) as ActionDomain[]).map((d
   domain,
   actions: Object.keys(actionLabels).filter((action) => actionDomain(action) === domain),
 }));
-
-function splitDateTime(value: string) {
-  const date = new Date(value);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return {
-    day: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    time: `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
-  };
-}
 
 export function AuditView({ auditLogs, filter, onFilterChange, onSearch, onReset, onPage }: {
   auditLogs: PageData<AuditLog> | null;

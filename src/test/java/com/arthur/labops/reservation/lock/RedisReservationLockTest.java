@@ -294,6 +294,28 @@ class RedisReservationLockTest {
                 .containsExactly("labops:reservation:equipment:7");
     }
 
+    @Test
+    void rejectsInvalidConfigAndNullLockArguments() {
+        RecordingCommands commands = RecordingCommands.successful(1L);
+        assertThatThrownBy(() -> new RedisReservationLock((RedisReservationLock.Commands) null,
+                Duration.ofSeconds(1), Duration.ofSeconds(10)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RedisReservationLock(commands, Duration.ofMillis(-1), Duration.ofSeconds(10)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RedisReservationLock(commands, Duration.ofSeconds(1), Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RedisReservationLock(commands, Duration.ofSeconds(1), Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        RedisReservationLock lock = newLock(commands);
+        assertThatThrownBy(() -> lock.execute(null, () -> "x"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> lock.executeUser(null, () -> "x"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> lock.execute(1L, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     private static RedisReservationLock newLock(RedisReservationLock.Commands commands) {
         return new RedisReservationLock(commands, Duration.ofSeconds(2), Duration.ofSeconds(10));
     }

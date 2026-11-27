@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { formatDate, statusLabels } from "../../lib/labels";
-import type { Equipment, PageData, Technician, UserProfile, WorkOrder } from "../../lib/types";
+import { formatDate, indexById, statusLabels } from "../../lib/labels";
+import type { Equipment, PageData, Technician, UserProfile, WorkOrder, WorkOrderStatus } from "../../lib/types";
 import { Icon } from "../icons";
 import { EquipmentCell, menuEntries, MoreMenu, StateBadge } from "../table";
 import { Empty } from "../ui";
@@ -18,12 +18,12 @@ export function WorkOrdersView({ user, workorders, equipment, technicians, filte
   onFilterChange: (filter: string) => void;
   onLoad: () => void;
   onCreate: () => void;
-  onTransition: (item: WorkOrder, targetStatus: string, assigneeId?: number) => void;
+  onTransition: (item: WorkOrder, targetStatus: WorkOrderStatus, assigneeId?: number) => void;
   onClaim: (item: WorkOrder) => void;
 }) {
   const [selectedAssignees, setSelectedAssignees] = useState<Record<number, string>>({});
   const [menuFor, setMenuFor] = useState<number | null>(null);
-  const equipmentById = new Map((equipment?.content ?? []).map((item) => [item.id, item]));
+  const equipmentById = indexById(equipment?.content);
   // The technician list is only loaded for admins, so a technician's own orders would otherwise read "维修员 #id".
   const technicianName = (id: number | null) => (id === user.id ? user.displayName : undefined)
     ?? technicians.find((item) => item.id === id)?.displayName
@@ -72,7 +72,7 @@ export function WorkOrdersView({ user, workorders, equipment, technicians, filte
       {Boolean(workorders?.content.length) && <div className="table-scroll"><table className="list-table">
         <thead><tr><th>故障描述</th><th>设备</th><th>处理人员</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
         <tbody>{workorders?.content.map((item) => {
-          const selected = selectedAssignees[item.id] || String(technicians[0]?.id || "");
+          const selected = selectedAssignees[item.id] || String(technicians[0]?.id ?? "");
           const primary = primaryStep(item);
           const menu = menuEntries(
             canActOn(item) && item.status === "RESOLVED" && { key: "reopen", label: "重新打开", onClick: () => onTransition(item, "IN_PROGRESS") },
