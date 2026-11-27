@@ -1,6 +1,7 @@
 package com.arthur.labops.reservation.lock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
@@ -122,6 +123,22 @@ class LocalReservationLockTest {
         }
 
         assertThat(maxInside.get()).isEqualTo(2);
+    }
+
+    @Test
+    void rejectsNullIdsAndNullAction() {
+        LocalReservationLock lock = new LocalReservationLock();
+        Instant start = Instant.parse("2026-12-01T10:00:00Z");
+        Instant end = Instant.parse("2026-12-01T12:00:00Z");
+
+        assertThatThrownBy(() -> lock.execute(null, () -> "ok"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> lock.executeWindow(null, start, end, () -> "ok"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> lock.executeUser(null, () -> "ok"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> lock.execute(1L, null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     private static Void hold(LocalReservationLock lock, long equipmentId, CyclicBarrier start,

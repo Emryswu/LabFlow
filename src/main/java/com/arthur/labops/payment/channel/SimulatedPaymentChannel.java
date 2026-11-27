@@ -7,7 +7,10 @@ import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
@@ -44,13 +47,11 @@ public class SimulatedPaymentChannel {
     private final TaskScheduler taskScheduler;
 
     private final AtomicLong sequence = new AtomicLong();
-    private final java.util.concurrent.atomic.AtomicInteger failNextOutbound =
-            new java.util.concurrent.atomic.AtomicInteger();
-    private final java.util.concurrent.atomic.AtomicInteger rejectNextOutboundFinal =
-            new java.util.concurrent.atomic.AtomicInteger();
+    private final AtomicInteger failNextOutbound = new AtomicInteger();
+    private final AtomicInteger rejectNextOutboundFinal = new AtomicInteger();
     private final List<ChannelEntry> ledger = new ArrayList<>();
-    private final java.util.Map<String, ChannelEntry> byMerchantKey = new java.util.HashMap<>();
-    private final java.util.Map<String, ChannelCallback> rejectedByMerchantKey = new java.util.HashMap<>();
+    private final Map<String, ChannelEntry> byMerchantKey = new HashMap<>();
+    private final Map<String, ChannelCallback> rejectedByMerchantKey = new HashMap<>();
     private final Deque<ChannelCallback> pending = new ArrayDeque<>();
     private final List<ChannelCallback> delivered = new ArrayList<>();
 
@@ -112,63 +113,83 @@ public class SimulatedPaymentChannel {
             throw new IllegalArgumentException("渠道交易金额必须为正数");
         }
 
-        ChannelEntry entry = null;
-        ChannelCallback callback = null;
-        boolean terminalRejection = false;
+        RecordedOutcome outcome = recordSynchronized(orderNo, type, amountCents, merchantIdempotencyKey);
+        if (outcome.replayed()) {
+            return outcome.entry();
+        }
+        logRecordedOutcome(type, orderNo, amountCents, outcome);
+        scheduleOrDispatch(outcome.callback());
+        return outcome.entry();
+    }
 
-        synchronized (this) {
-            if (merchantIdempotencyKey != null) {
-                ChannelEntry existing = byMerchantKey.get(merchantIdempotencyKey);
-                if (existing != null) {
-                    log.info("Simulated channel returning existing transaction for merchant key={} channelTxnId={}",
-                            merchantIdempotencyKey, existing.channelTxnId());
-                    return existing;
-                }
-                if (rejectedByMerchantKey.containsKey(merchantIdempotencyKey)) {
-                    log.info("Simulated channel returning existing terminal rejection for merchant key={}",
-                            merchantIdempotencyKey);
-                    return null;
-                }
-            }
-
-            if (failNextOutbound.getAndUpdate(remaining -> Math.max(0, remaining - 1)) > 0) {
-                log.warn("Simulated channel transport failure {} orderNo={} (injected)", type, orderNo);
-                throw new IllegalStateException("渠道暂时不可用（注入的故障）");
-            }
-
-            String channelTxnId = "CH-" + type.name().charAt(0) + "-" + sequence.incrementAndGet();
-            Instant now = Instant.now();
-
-            if (rejectNextOutboundFinal.getAndUpdate(remaining -> Math.max(0, remaining - 1)) > 0) {
-                terminalRejection = true;
-                callback = ChannelCallback.rejected(
-                        orderNo, type, amountCents, merchantIdempotencyKey, channelTxnId, now);
-                if (merchantIdempotencyKey != null) {
-                    rejectedByMerchantKey.put(merchantIdempotencyKey, callback);
-                }
-            } else {
-                entry = new ChannelEntry(
-                        channelTxnId, orderNo, type, amountCents, ChannelEntry.STATUS_SUCCESS, now);
-                ledger.add(entry);
-                if (merchantIdempotencyKey != null) {
-                    byMerchantKey.put(merchantIdempotencyKey, entry);
-                }
-                callback = ChannelCallback.of(entry, merchantIdempotencyKey);
-            }
-
-            if (properties.getCallbackMode() != CallbackMode.IMMEDIATE) {
-                pending.addLast(callback);
+    private synchronized RecordedOutcome recordSynchronized(String orderNo, ChannelEntryType type,
+                                                            long amountCents, String merchantIdempotencyKey) {
+        if (merchantIdempotencyKey != null) {
+            RecordedOutcome existing = lookupExistingOutcome(merchantIdempotencyKey);
+            if (existing != null) {
+                return existing;
             }
         }
+        if (failNextOutbound.getAndUpdate(remaining -> Math.max(0, remaining - 1)) > 0) {
+            log.warn("Simulated channel transport failure {} orderNo={} (injected)", type, orderNo);
+            throw new IllegalStateException("渠道暂时不可用（注入的故障）");
+        }
 
-        if (terminalRejection) {
+        RecordedOutcome outcome = createOutcome(orderNo, type, amountCents, merchantIdempotencyKey, Instant.now());
+        if (properties.getCallbackMode() != CallbackMode.IMMEDIATE) {
+            pending.addLast(outcome.callback());
+        }
+        return outcome;
+    }
+
+    private RecordedOutcome lookupExistingOutcome(String merchantIdempotencyKey) {
+        ChannelEntry existing = byMerchantKey.get(merchantIdempotencyKey);
+        if (existing != null) {
+            log.info("Simulated channel returning existing transaction for merchant key={} channelTxnId={}",
+                    merchantIdempotencyKey, existing.channelTxnId());
+            return RecordedOutcome.replayed(existing);
+        }
+        if (rejectedByMerchantKey.containsKey(merchantIdempotencyKey)) {
+            log.info("Simulated channel returning existing terminal rejection for merchant key={}",
+                    merchantIdempotencyKey);
+            return RecordedOutcome.replayed(null);
+        }
+        return null;
+    }
+
+    private RecordedOutcome createOutcome(String orderNo, ChannelEntryType type, long amountCents,
+                                          String merchantIdempotencyKey, Instant now) {
+        String channelTxnId = "CH-" + type.name().charAt(0) + "-" + sequence.incrementAndGet();
+        if (rejectNextOutboundFinal.getAndUpdate(remaining -> Math.max(0, remaining - 1)) > 0) {
+            ChannelCallback callback = ChannelCallback.rejected(
+                    orderNo, type, amountCents, merchantIdempotencyKey, channelTxnId, now);
+            if (merchantIdempotencyKey != null) {
+                rejectedByMerchantKey.put(merchantIdempotencyKey, callback);
+            }
+            return new RecordedOutcome(null, callback, true, false);
+        }
+
+        ChannelEntry entry = new ChannelEntry(
+                channelTxnId, orderNo, type, amountCents, ChannelEntry.STATUS_SUCCESS, now);
+        ledger.add(entry);
+        if (merchantIdempotencyKey != null) {
+            byMerchantKey.put(merchantIdempotencyKey, entry);
+        }
+        return new RecordedOutcome(entry, ChannelCallback.of(entry, merchantIdempotencyKey), false, false);
+    }
+
+    private static void logRecordedOutcome(ChannelEntryType type, String orderNo, long amountCents,
+                                           RecordedOutcome outcome) {
+        if (outcome.terminalRejection()) {
             log.info("Simulated channel terminally rejected {} orderNo={} amountCents={} channelTxnId={}",
-                    type, orderNo, amountCents, callback.channelTxnId());
+                    type, orderNo, amountCents, outcome.callback().channelTxnId());
         } else {
             log.info("Simulated channel recorded {} orderNo={} amountCents={} channelTxnId={}",
-                    type, orderNo, amountCents, entry.channelTxnId());
+                    type, orderNo, amountCents, outcome.entry().channelTxnId());
         }
+    }
 
+    private void scheduleOrDispatch(ChannelCallback callback) {
         switch (properties.getCallbackMode()) {
             case IMMEDIATE -> dispatch(callback);
             case DELAYED -> taskScheduler.schedule(
@@ -176,7 +197,13 @@ public class SimulatedPaymentChannel {
             case MANUAL -> log.info("Simulated channel holding callback channelTxnId={} status={} (MANUAL mode)",
                     callback.channelTxnId(), callback.status());
         }
-        return entry;
+    }
+
+    private record RecordedOutcome(ChannelEntry entry, ChannelCallback callback,
+                                   boolean terminalRejection, boolean replayed) {
+        static RecordedOutcome replayed(ChannelEntry entry) {
+            return new RecordedOutcome(entry, null, false, true);
+        }
     }
 
     /** Delivers every queued callback. No-op in {@link CallbackMode#IMMEDIATE}. */

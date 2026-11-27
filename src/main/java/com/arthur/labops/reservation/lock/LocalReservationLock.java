@@ -3,6 +3,7 @@ package com.arthur.labops.reservation.lock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -15,12 +16,13 @@ import org.springframework.stereotype.Component;
 public class LocalReservationLock implements ReservationLock {
 
     private static final String EQUIPMENT_PREFIX = "equipment:";
+    private static final String USER_PREFIX = "user:";
 
     private final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     @Override
     public <T> T execute(Long equipmentId, Supplier<T> action) {
-        return executeKeys(List.of(EQUIPMENT_PREFIX + equipmentId), action);
+        return executeKeys(List.of(ReservationLockKeys.equipmentKey(EQUIPMENT_PREFIX, equipmentId)), action);
     }
 
     @Override
@@ -30,10 +32,11 @@ public class LocalReservationLock implements ReservationLock {
 
     @Override
     public <T> T executeUser(Long userId, Supplier<T> action) {
-        return executeKeys(List.of("user:" + userId), action);
+        return executeKeys(List.of(ReservationLockKeys.userKey(USER_PREFIX, userId)), action);
     }
 
     private <T> T executeKeys(List<String> keys, Supplier<T> action) {
+        Objects.requireNonNull(action, "action must not be null");
         List<ReentrantLock> acquired = new ArrayList<>(keys.size());
         try {
             for (String key : keys) {

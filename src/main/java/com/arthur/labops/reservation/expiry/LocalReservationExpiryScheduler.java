@@ -2,8 +2,11 @@ package com.arthur.labops.reservation.expiry;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,19 +39,42 @@ public class LocalReservationExpiryScheduler implements ReservationExpirySchedul
 
     @Override
     public void schedule(ReservationDeadlineKind kind, Long reservationId, Instant deadline) {
+        Objects.requireNonNull(kind, "kind must not be null");
+        Objects.requireNonNull(reservationId, "reservationId must not be null");
+        Objects.requireNonNull(deadline, "deadline must not be null");
         String key = key(kind, reservationId);
+        AtomicReference<ScheduledFuture<?>> self = new AtomicReference<>();
+        AtomicBoolean finished = new AtomicBoolean(false);
         ScheduledFuture<?> future = taskScheduler.schedule(() -> {
-            armed.remove(key);
-            deadlineHandler.fire(kind, reservationId);
+            ScheduledFuture<?> own = self.get();
+            if (own != null) {
+                armed.remove(key, own);
+            }
+            try {
+                deadlineHandler.fire(kind, reservationId);
+            } finally {
+                finished.set(true);
+                own = self.get();
+                if (own != null) {
+                    armed.remove(key, own);
+                }
+            }
         }, deadline);
+        self.set(future);
         ScheduledFuture<?> previous = armed.put(key, future);
         if (previous != null) {
             previous.cancel(false);
+        }
+        // Reclaim immediately if the task finished before armed.put completed.
+        if (finished.get()) {
+            armed.remove(key, future);
         }
     }
 
     @Override
     public void cancel(ReservationDeadlineKind kind, Long reservationId, Instant deadline) {
+        Objects.requireNonNull(kind, "kind must not be null");
+        Objects.requireNonNull(reservationId, "reservationId must not be null");
         ScheduledFuture<?> future = armed.remove(key(kind, reservationId));
         if (future != null) {
             future.cancel(false);

@@ -2,6 +2,7 @@ package com.arthur.labops.payment;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,6 +28,8 @@ public class PaymentRequest {
 
     /** Cap on attempts before a human is asked to look. */
     static final int MAX_ATTEMPTS = 8;
+    static final int MAX_ERROR_LENGTH = 500;
+    private static final int MAX_BACKOFF_SHIFT = 20;
 
     private static final Duration BASE_BACKOFF = Duration.ofSeconds(5);
     private static final Duration MAX_BACKOFF = Duration.ofMinutes(10);
@@ -64,7 +67,7 @@ public class PaymentRequest {
     @Column(name = "channel_attempt", nullable = false)
     private int channelAttempt;
 
-    @Column(name = "last_error", length = 500)
+    @Column(name = "last_error", length = MAX_ERROR_LENGTH)
     private String lastError;
 
     @Column(name = "next_attempt_at", nullable = false)
@@ -80,13 +83,23 @@ public class PaymentRequest {
     }
 
     public PaymentRequest(String orderNo, String idempotencyKey, PaymentTransactionType type, long amountCents) {
+        if (orderNo == null || orderNo.isBlank()) {
+            throw new IllegalArgumentException("orderNo must not be blank");
+        }
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new IllegalArgumentException("idempotencyKey must not be blank");
+        }
+        Objects.requireNonNull(type, "type must not be null");
+        if (amountCents <= 0) {
+            throw new IllegalArgumentException("amountCents must be positive");
+        }
         this.orderNo = orderNo;
         this.idempotencyKey = idempotencyKey;
         this.type = type;
         this.amountCents = amountCents;
         this.status = PaymentRequestStatus.PENDING;
         this.nextAttemptAt = Instant.now();
-        this.createdAt = Instant.now();
+        this.createdAt = this.nextAttemptAt;
         this.updatedAt = this.createdAt;
     }
 
@@ -141,6 +154,10 @@ public class PaymentRequest {
      *         was already terminal or the retry budget is exhausted
      */
     public boolean reopenAfterChannelRejection(String reason) {
+        return reopenAfterChannelRejection(reason, Instant.now());
+    }
+
+    boolean reopenAfterChannelRejection(String reason, Instant now) {
         if (status == PaymentRequestStatus.ABANDONED || status == PaymentRequestStatus.OBSOLETE) {
             return false;
         }
@@ -153,15 +170,7 @@ public class PaymentRequest {
             this.attempts += 1;
         }
         this.channelAttempt += 1;
-        this.lastError = reason == null ? null : reason.substring(0, Math.min(reason.length(), 500));
-        this.updatedAt = Instant.now();
-        if (attempts >= MAX_ATTEMPTS) {
-            this.status = PaymentRequestStatus.ABANDONED;
-            return false;
-        }
-        this.status = PaymentRequestStatus.FAILED;
-        this.nextAttemptAt = Instant.now();
-        return true;
+        return !recordFailureState(reason, now, false);
     }
 
     public void markSent() {
@@ -173,18 +182,37 @@ public class PaymentRequest {
 
     /** @return true when this attempt exhausted the retry budget */
     public boolean markFailed(String error) {
+        return markFailed(error, Instant.now());
+    }
+
+    boolean markFailed(String error, Instant now) {
         this.attempts += 1;
-        this.lastError = error == null ? null : error.substring(0, Math.min(error.length(), 500));
-        this.updatedAt = Instant.now();
+        return recordFailureState(error, now, true);
+    }
+
+    private boolean recordFailureState(String error, Instant now, boolean applyBackoff) {
+        this.lastError = truncateError(error);
+        this.updatedAt = now;
         if (attempts >= MAX_ATTEMPTS) {
             this.status = PaymentRequestStatus.ABANDONED;
             return true;
         }
         this.status = PaymentRequestStatus.FAILED;
-        long backoffMillis = Math.min(
-                MAX_BACKOFF.toMillis(),
-                BASE_BACKOFF.toMillis() * (1L << Math.min(attempts - 1, 20)));
-        this.nextAttemptAt = Instant.now().plusMillis(backoffMillis);
+        if (applyBackoff) {
+            long backoffMillis = Math.min(
+                    MAX_BACKOFF.toMillis(),
+                    BASE_BACKOFF.toMillis() * (1L << Math.min(attempts - 1, MAX_BACKOFF_SHIFT)));
+            this.nextAttemptAt = now.plusMillis(backoffMillis);
+        } else {
+            this.nextAttemptAt = now;
+        }
         return false;
+    }
+
+    private static String truncateError(String error) {
+        if (error == null) {
+            return null;
+        }
+        return error.length() <= MAX_ERROR_LENGTH ? error : error.substring(0, MAX_ERROR_LENGTH);
     }
 }

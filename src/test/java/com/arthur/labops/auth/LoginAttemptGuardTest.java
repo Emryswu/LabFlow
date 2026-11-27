@@ -133,6 +133,24 @@ class LoginAttemptGuardTest {
         assertRateLimited(guard, "203.0.113.10", "student");
     }
 
+    @Test
+    void handlesNullUsernameAndRejectsInvalidConstructorConfig() {
+        LocalLoginAttemptGuard guard = new LocalLoginAttemptGuard(2, 5, Duration.ofMinutes(1));
+        assertThat(LoginThrottleKeys.identityKey(null, null)).isEqualTo("ip:unknown|");
+        assertThatCode(() -> fail(guard, null, null)).doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> new LocalLoginAttemptGuard(0, 5, Duration.ofMinutes(1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LocalLoginAttemptGuard(2, 0, Duration.ofMinutes(1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LocalLoginAttemptGuard(2, 5, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LocalLoginAttemptGuard(2, 5, Duration.ofMinutes(-1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LocalLoginAttemptGuard(2, 5, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static void fail(LoginAttemptThrottle guard, String ip, String username) {
         String attempt = guard.beginAttempt(ip, username);
         guard.recordFailure(ip, username, attempt);

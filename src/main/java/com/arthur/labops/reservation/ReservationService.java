@@ -87,40 +87,14 @@ public class ReservationService {
 
     @Transactional
     public ReservationResponse create(CreateReservationRequest request) {
-        validateTimeWindow(request.startTime(), request.endTime());
+        Instant now = Instant.now();
+        validateTimeWindow(request.startTime(), request.endTime(), now);
 
-        PlatformUser requester = currentUserService.getRequiredUser();
-        userRepositoryForUpdate(requester.getId());
-        long active = reservationRepository.countByRequesterIdAndStatusIn(
-                requester.getId(), QUOTA_STATUSES);
-        if (active >= maxActivePerUser) {
-            throw new BusinessException(
-                    "RESERVATION_QUOTA_EXCEEDED",
-                    "未关闭预约数量已达上限（" + maxActivePerUser + "）",
-                    HttpStatus.CONFLICT);
-        }
-
-        Equipment equipment = equipmentRepository.findByIdForUpdate(request.equipmentId())
-                .orElseThrow(() -> new BusinessException(
-                        "EQUIPMENT_NOT_FOUND", "设备不存在", HttpStatus.NOT_FOUND));
-
-        if (equipment.getStatus() == EquipmentStatus.MAINTENANCE
-                || equipment.getStatus() == EquipmentStatus.RETIRED) {
-            throw new BusinessException(
-                    "EQUIPMENT_UNAVAILABLE", "设备当前不可预约", HttpStatus.CONFLICT);
-        }
-
+        PlatformUser requester = lockUserAndEnsureQuota(currentUserService.getRequiredUser());
+        Equipment equipment = lockReservableEquipment(request.equipmentId());
         assertNoConflict(equipment.getId(), request.startTime(), request.endTime(), null);
-        Instant expiresAt = Instant.now().plus(approvalTimeout);
-        Reservation reservation = new Reservation(
-                equipment,
-                requester.getId(),
-                requester.getDisplayName(),
-                request.purpose().trim(),
-                request.startTime(),
-                request.endTime(),
-                expiresAt);
-        Reservation saved = reservationRepository.save(reservation);
+
+        Reservation saved = saveNewReservation(equipment, requester, request, now);
         auditLogService.record(requester, "RESERVATION_CREATED", "RESERVATION", saved.getId(),
                 "预约设备 " + equipment.getCode());
         eventPublisher.publishEvent(ReservationDeadlineEvent.arm(
@@ -133,37 +107,10 @@ public class ReservationService {
         PlatformUser actor = currentUserService.getRequiredUser();
         assertTeacherOrAdmin(actor);
         Reservation reservation = findForStateChange(reservationId);
-        if (reservation.getStatus() != ReservationStatus.PENDING) {
-            throw new BusinessException(
-                    "RESERVATION_NOT_PENDING", "只有待审批预约可以处理", HttpStatus.CONFLICT);
-        }
-        if (reservation.expireIfPending(Instant.now())) {
-            auditLogService.recordSystem(
-                    "RESERVATION_EXPIRED", "RESERVATION", reservation.getId(), "审批时发现待审批预约已过期");
-            throw new ReservationAlreadyExpiredException();
-        }
-        Equipment equipment = reservation.getEquipment();
-        if (request.decision() == ReservationStatus.APPROVED) {
-            if (equipment.getStatus() == EquipmentStatus.MAINTENANCE
-                    || equipment.getStatus() == EquipmentStatus.RETIRED) {
-                throw new BusinessException(
-                        "EQUIPMENT_UNAVAILABLE", "设备当前不可预约", HttpStatus.CONFLICT);
-            }
-            assertNoConflict(
-                    equipment.getId(),
-                    reservation.getStartTime(),
-                    reservation.getEndTime(),
-                    reservation.getId());
-            approveOrBill(reservation, equipment);
-            equipmentStatusService.sync(equipment.getId());
-        } else if (request.decision() == ReservationStatus.REJECTED) {
-            reservation.reject();
-        } else {
-            throw new BusinessException(
-                    "INVALID_RESERVATION_DECISION",
-                    "审批结果只能是 APPROVED 或 REJECTED",
-                    HttpStatus.BAD_REQUEST);
-        }
+        Instant now = Instant.now();
+        ensurePendingAndUnexpired(reservation, now);
+
+        applyDecision(reservation, request.decision(), now);
         auditLogService.record(actor, "RESERVATION_" + request.decision().name(),
                 "RESERVATION", reservation.getId(), decisionDetail(reservation));
         // Decided either way, so the approval deadline is spent. Drop it rather
@@ -173,18 +120,100 @@ public class ReservationService {
         return ReservationResponse.from(reservation);
     }
 
+    private PlatformUser lockUserAndEnsureQuota(PlatformUser requester) {
+        userRepositoryForUpdate(requester.getId());
+        long active = reservationRepository.countByRequesterIdAndStatusIn(
+                requester.getId(), QUOTA_STATUSES);
+        if (active >= maxActivePerUser) {
+            throw new BusinessException(
+                    "RESERVATION_QUOTA_EXCEEDED",
+                    "未关闭预约数量已达上限（" + maxActivePerUser + "）",
+                    HttpStatus.CONFLICT);
+        }
+        return requester;
+    }
+
+    private Equipment lockReservableEquipment(Long equipmentId) {
+        Equipment equipment = equipmentRepository.findByIdForUpdate(equipmentId)
+                .orElseThrow(() -> new BusinessException(
+                        "EQUIPMENT_NOT_FOUND", "设备不存在", HttpStatus.NOT_FOUND));
+        ensureEquipmentReservable(equipment);
+        return equipment;
+    }
+
+    private static void ensureEquipmentReservable(Equipment equipment) {
+        if (equipment.getStatus() == EquipmentStatus.MAINTENANCE
+                || equipment.getStatus() == EquipmentStatus.RETIRED) {
+            throw new BusinessException(
+                    "EQUIPMENT_UNAVAILABLE", "设备当前不可预约", HttpStatus.CONFLICT);
+        }
+    }
+
+    private Reservation saveNewReservation(Equipment equipment, PlatformUser requester,
+                                           CreateReservationRequest request, Instant now) {
+        Reservation reservation = new Reservation(
+                equipment,
+                requester.getId(),
+                requester.getDisplayName(),
+                request.purpose().trim(),
+                request.startTime(),
+                request.endTime(),
+                now.plus(approvalTimeout));
+        return reservationRepository.save(reservation);
+    }
+
+    private void ensurePendingAndUnexpired(Reservation reservation, Instant now) {
+        if (reservation.getStatus() != ReservationStatus.PENDING) {
+            throw new BusinessException(
+                    "RESERVATION_NOT_PENDING", "只有待审批预约可以处理", HttpStatus.CONFLICT);
+        }
+        if (reservation.expireIfPending(now)) {
+            auditLogService.recordSystem(
+                    "RESERVATION_EXPIRED", "RESERVATION", reservation.getId(), "审批时发现待审批预约已过期");
+            throw new ReservationAlreadyExpiredException();
+        }
+    }
+
+    private void applyDecision(Reservation reservation, ReservationStatus decision, Instant now) {
+        switch (decision) {
+            case APPROVED -> {
+                Equipment equipment = reservation.getEquipment();
+                ensureEquipmentReservable(equipment);
+                assertNoConflict(
+                        equipment.getId(),
+                        reservation.getStartTime(),
+                        reservation.getEndTime(),
+                        reservation.getId());
+                approveOrBill(reservation, equipment, now);
+                equipmentStatusService.sync(equipment.getId());
+            }
+            case REJECTED -> reservation.reject();
+            default -> throw new BusinessException(
+                    "INVALID_RESERVATION_DECISION",
+                    "审批结果只能是 APPROVED 或 REJECTED",
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
     /**
      * Free equipment goes straight to APPROVED, exactly as before payment existed.
      * Priced equipment stops at AWAITING_PAYMENT: it keeps the slot, but only for
      * the payment window, and an order is opened for the money.
      */
-    private void approveOrBill(Reservation reservation, Equipment equipment) {
+    private void approveOrBill(Reservation reservation, Equipment equipment, Instant now) {
         long amountCents = amountCentsFor(reservation, equipment);
         if (amountCents <= 0) {
             reservation.approve();
             return;
         }
-        Instant now = Instant.now();
+        Instant deadline = resolvePaymentDeadline(reservation, now);
+        reservation.awaitPayment(deadline);
+        paymentGateway.openOrder(reservation, amountCents);
+        eventPublisher.publishEvent(ReservationDeadlineEvent.arm(
+                ReservationDeadlineKind.PAYMENT, reservation.getId(), deadline));
+    }
+
+    private Instant resolvePaymentDeadline(Reservation reservation, Instant now) {
         if (!reservation.getStartTime().isAfter(now)) {
             // A priced reservation whose slot has already begun cannot be given a
             // payment window at all: any window would run into time the user is
@@ -198,13 +227,9 @@ public class ReservationService {
         // Never let the window outlive the slot it is holding. A reservation
         // starting in two minutes must not get ten minutes to pay for it.
         Instant windowEnd = now.plus(paymentWindow);
-        Instant deadline = windowEnd.isBefore(reservation.getStartTime())
+        return windowEnd.isBefore(reservation.getStartTime())
                 ? windowEnd
                 : reservation.getStartTime();
-        reservation.awaitPayment(deadline);
-        paymentGateway.openOrder(reservation, amountCents);
-        eventPublisher.publishEvent(ReservationDeadlineEvent.arm(
-                ReservationDeadlineKind.PAYMENT, reservation.getId(), deadline));
     }
 
     /**
@@ -244,25 +269,17 @@ public class ReservationService {
     public ReservationResponse cancel(Long reservationId) {
         PlatformUser actor = currentUserService.getRequiredUser();
         Reservation reservation = findForStateChange(reservationId);
-        if (!reservation.getRequesterId().equals(actor.getId()) && actor.getRole() != UserRole.ADMIN) {
-            throw new BusinessException(
-                    "RESERVATION_NOT_OWNED", "只能取消自己的预约", HttpStatus.FORBIDDEN);
-        }
-        if (reservation.getStatus() == ReservationStatus.REFUNDING) {
-            throw new BusinessException(
-                    "RESERVATION_REFUND_IN_PROGRESS", "退款处理中，无需重复取消", HttpStatus.CONFLICT);
-        }
+        ensureCancellableBy(reservation, actor);
+
         Long equipmentId = reservation.getEquipment().getId();
         ReservationClosure closure = closureService.close(reservation);
         if (closure == ReservationClosure.NOT_CLOSEABLE) {
             throw new BusinessException(
                     "RESERVATION_NOT_CANCELLABLE", "当前预约状态不能取消", HttpStatus.CONFLICT);
         }
-        String detail = closure == ReservationClosure.REFUND_PENDING
-                ? "取消已支付预约，退款处理中"
-                : "取消预约";
         equipmentStatusService.sync(equipmentId);
-        auditLogService.record(actor, "RESERVATION_CANCELLED", "RESERVATION", reservation.getId(), detail);
+        auditLogService.record(actor, "RESERVATION_CANCELLED", "RESERVATION", reservation.getId(),
+                cancellationDetail(closure));
         return ReservationResponse.from(reservation);
     }
 
@@ -290,6 +307,32 @@ public class ReservationService {
         if (from != null && to != null && !from.isBefore(to)) {
             throw new BusinessException("INVALID_TIME_WINDOW", "开始时间必须早于结束时间", HttpStatus.BAD_REQUEST);
         }
+        Specification<Reservation> specification = buildSearchSpecification(status, equipmentId, from, to, actor);
+        Page<Reservation> page = reservationRepository.findAll(specification, pageable);
+        Map<Long, List<ReservationConflict>> conflicts = conflictsFor(page.getContent(), actor);
+        return page.map(reservation -> ReservationResponse.from(
+                reservation, conflicts.getOrDefault(reservation.getId(), List.of())));
+    }
+
+    private static void ensureCancellableBy(Reservation reservation, PlatformUser actor) {
+        if (!reservation.getRequesterId().equals(actor.getId()) && actor.getRole() != UserRole.ADMIN) {
+            throw new BusinessException(
+                    "RESERVATION_NOT_OWNED", "只能取消自己的预约", HttpStatus.FORBIDDEN);
+        }
+        if (reservation.getStatus() == ReservationStatus.REFUNDING) {
+            throw new BusinessException(
+                    "RESERVATION_REFUND_IN_PROGRESS", "退款处理中，无需重复取消", HttpStatus.CONFLICT);
+        }
+    }
+
+    private static String cancellationDetail(ReservationClosure closure) {
+        return closure == ReservationClosure.REFUND_PENDING
+                ? "取消已支付预约，退款处理中"
+                : "取消预约";
+    }
+
+    private static Specification<Reservation> buildSearchSpecification(ReservationStatus status, Long equipmentId,
+                                                                       Instant from, Instant to, PlatformUser actor) {
         Specification<Reservation> specification = (root, query, builder) -> builder.conjunction();
         // Reservations touching [from, to): what a calendar for that window has to draw.
         if (from != null) {
@@ -308,18 +351,16 @@ public class ReservationService {
                     builder.equal(root.get("equipment").get("id"), equipmentId));
         }
         if (actor.getRole() == UserRole.STUDENT) {
-            specification = specification.and((root, query, builder) ->
+            return specification.and((root, query, builder) ->
                     builder.equal(root.get("requesterId"), actor.getId()));
-        } else if (actor.getRole() == UserRole.TECHNICIAN) {
+        }
+        if (actor.getRole() == UserRole.TECHNICIAN) {
             // 维修员侧重点是设备可用性，只看已批准/进行相关状态的排期
-            specification = specification.and((root, query, builder) ->
+            return specification.and((root, query, builder) ->
                     root.get("status").in(ReservationStatus.PENDING, ReservationStatus.APPROVED,
                             ReservationStatus.AWAITING_PAYMENT, ReservationStatus.PAID));
         }
-        Page<Reservation> page = reservationRepository.findAll(specification, pageable);
-        Map<Long, List<ReservationConflict>> conflicts = conflictsFor(page.getContent(), actor);
-        return page.map(reservation -> ReservationResponse.from(
-                reservation, conflicts.getOrDefault(reservation.getId(), List.of())));
+        return specification;
     }
 
     /**
@@ -335,32 +376,49 @@ public class ReservationService {
         if (pending.isEmpty()) {
             return Map.of();
         }
+        TimeBounds bounds = boundingWindow(pending);
         Set<Long> equipmentIds = pending.stream()
                 .map(reservation -> reservation.getEquipment().getId())
                 .collect(Collectors.toSet());
-        Instant windowStart = pending.stream().map(Reservation::getStartTime).min(Comparator.naturalOrder()).orElseThrow();
-        Instant windowEnd = pending.stream().map(Reservation::getEndTime).max(Comparator.naturalOrder()).orElseThrow();
         List<Reservation> candidates = reservationRepository.findOverlappingCandidates(
-                equipmentIds, OCCUPIED_STATUSES, windowEnd, windowStart);
+                equipmentIds, OCCUPIED_STATUSES, bounds.end(), bounds.start());
 
         Map<Long, List<ReservationConflict>> result = new HashMap<>();
         for (Reservation request : pending) {
-            Long equipmentId = request.getEquipment().getId();
-            List<ReservationConflict> clashes = candidates.stream()
-                    .filter(held -> held.getEquipment().getId().equals(equipmentId))
-                    .filter(held -> held.overlaps(request.getStartTime(), request.getEndTime()))
-                    .map(held -> new ReservationConflict(
-                            held.getId(), held.getStartTime(), held.getEndTime(), held.getStatus(),
-                            // Students only ever see their own reservations; a clash tells them
-                            // the slot is taken, not by whom.
-                            actor.getRole() == UserRole.STUDENT && !held.getRequesterId().equals(actor.getId())
-                                    ? null : held.getRequesterName()))
-                    .toList();
+            List<ReservationConflict> clashes = clashesForRequest(request, candidates, actor);
             if (!clashes.isEmpty()) {
                 result.put(request.getId(), clashes);
             }
         }
         return result;
+    }
+
+    private static TimeBounds boundingWindow(List<Reservation> pending) {
+        Instant windowStart = pending.stream().map(Reservation::getStartTime).min(Comparator.naturalOrder()).orElseThrow();
+        Instant windowEnd = pending.stream().map(Reservation::getEndTime).max(Comparator.naturalOrder()).orElseThrow();
+        return new TimeBounds(windowStart, windowEnd);
+    }
+
+    private static List<ReservationConflict> clashesForRequest(Reservation request, List<Reservation> candidates,
+                                                             PlatformUser actor) {
+        Long equipmentId = request.getEquipment().getId();
+        return candidates.stream()
+                .filter(held -> held.getEquipment().getId().equals(equipmentId))
+                .filter(held -> held.overlaps(request.getStartTime(), request.getEndTime()))
+                .map(held -> toConflict(held, actor))
+                .toList();
+    }
+
+    private static ReservationConflict toConflict(Reservation held, PlatformUser actor) {
+        // Students only ever see their own reservations; a clash tells them
+        // the slot is taken, not by whom.
+        String visibleRequester = actor.getRole() == UserRole.STUDENT && !held.getRequesterId().equals(actor.getId())
+                ? null : held.getRequesterName();
+        return new ReservationConflict(
+                held.getId(), held.getStartTime(), held.getEndTime(), held.getStatus(), visibleRequester);
+    }
+
+    private record TimeBounds(Instant start, Instant end) {
     }
 
     /**
@@ -396,14 +454,13 @@ public class ReservationService {
         }
     }
 
-    private void validateTimeWindow(Instant start, Instant end) {
+    private void validateTimeWindow(Instant start, Instant end, Instant now) {
         if (!start.isBefore(end)) {
             throw new BusinessException(
                     "INVALID_RESERVATION_TIME",
                     "预约开始时间必须早于结束时间",
                     HttpStatus.BAD_REQUEST);
         }
-        Instant now = Instant.now();
         if (!start.isAfter(now)) {
             throw new BusinessException(
                     "RESERVATION_START_IN_PAST",

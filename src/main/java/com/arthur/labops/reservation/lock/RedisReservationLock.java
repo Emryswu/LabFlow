@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +31,7 @@ public class RedisReservationLock implements ReservationLock {
 
     private static final Logger log = LoggerFactory.getLogger(RedisReservationLock.class);
     private static final String EQUIPMENT_PREFIX = "labops:reservation:equipment:";
+    private static final String USER_PREFIX = "labops:reservation:user:";
     private static final long BASE_RETRY_MS = 10L;
     private static final long MAX_BACKOFF_MS = 80L;
 
@@ -57,14 +59,20 @@ public class RedisReservationLock implements ReservationLock {
     }
 
     RedisReservationLock(Commands commands, Duration waitTime, Duration leaseTime) {
-        this.commands = commands;
+        this.commands = Objects.requireNonNull(commands, "commands must not be null");
+        if (waitTime == null || waitTime.isNegative()) {
+            throw new IllegalArgumentException("waitTime must be non-negative");
+        }
+        if (leaseTime == null || leaseTime.isNegative() || leaseTime.isZero()) {
+            throw new IllegalArgumentException("leaseTime must be positive");
+        }
         this.waitTime = waitTime;
         this.leaseTime = leaseTime;
     }
 
     @Override
     public <T> T execute(Long equipmentId, Supplier<T> action) {
-        return executeKeys(List.of(EQUIPMENT_PREFIX + equipmentId), action);
+        return executeKeys(List.of(ReservationLockKeys.equipmentKey(EQUIPMENT_PREFIX, equipmentId)), action);
     }
 
     @Override
@@ -74,10 +82,11 @@ public class RedisReservationLock implements ReservationLock {
 
     @Override
     public <T> T executeUser(Long userId, Supplier<T> action) {
-        return executeKeys(List.of("labops:reservation:user:" + userId), action);
+        return executeKeys(List.of(ReservationLockKeys.userKey(USER_PREFIX, userId)), action);
     }
 
     private <T> T executeKeys(List<String> keys, Supplier<T> action) {
+        Objects.requireNonNull(action, "action must not be null");
         long deadline = System.nanoTime() + waitTime.toNanos();
         List<HeldLock> acquired = new ArrayList<>(keys.size());
         try {

@@ -3,6 +3,7 @@ package com.arthur.labops.auth;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -95,11 +96,12 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
             int maxPerIp,
             Duration window,
             Clock clock) {
-        this.commands = commands;
+        LoginThrottleKeys.validateConfig(maxPerIdentity, maxPerIp, window);
+        this.commands = Objects.requireNonNull(commands, "commands must not be null");
         this.maxPerIdentity = maxPerIdentity;
         this.maxPerIp = maxPerIp;
         this.windowMs = window.toMillis();
-        this.clock = clock;
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     @Override
@@ -124,10 +126,7 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
                     HttpStatus.SERVICE_UNAVAILABLE);
         }
         if (result == null || result != 0L) {
-            throw new BusinessException(
-                    "LOGIN_RATE_LIMITED",
-                    "登录尝试过于频繁，请稍后重试",
-                    HttpStatus.TOO_MANY_REQUESTS);
+            throw LoginThrottleKeys.rateLimited();
         }
         return attempt;
     }

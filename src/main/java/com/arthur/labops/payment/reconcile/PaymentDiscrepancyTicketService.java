@@ -29,6 +29,8 @@ import com.arthur.labops.workorder.WorkOrderPriority;
 @Service
 public class PaymentDiscrepancyTicketService {
 
+    public static final String OUTBOUND_KEY_PREFIX = "outbound|";
+    private static final long HIGH_PRIORITY_DELTA_CENTS = 10_000L;
     private static final Logger log = LoggerFactory.getLogger(PaymentDiscrepancyTicketService.class);
 
     private final FaultWorkOrderRepository workOrderRepository;
@@ -78,8 +80,7 @@ public class PaymentDiscrepancyTicketService {
             log.debug("Discrepancy ticket already exists key={}", discrepancy.key());
             return false;
         }
-        PlatformUser systemReporter = userRepository.findByUsername(SystemAccountInitializer.SYSTEM_USERNAME)
-                .orElseThrow(() -> new IllegalStateException("系统账号缺失，无法创建对账差异工单"));
+        PlatformUser systemReporter = requireSystemReporter();
 
         FaultWorkOrder ticket = FaultWorkOrder.discrepancy(
                 equipment,
@@ -149,7 +150,7 @@ public class PaymentDiscrepancyTicketService {
     }
 
     private boolean writeOutboundHaltedTicket(com.arthur.labops.payment.PaymentRequest request, String reason) {
-        String key = "outbound|" + request.getIdempotencyKey();
+        String key = OUTBOUND_KEY_PREFIX + request.getIdempotencyKey();
         if (workOrderRepository.existsByDiscrepancyKey(key)) {
             return false;
         }
@@ -162,8 +163,7 @@ public class PaymentDiscrepancyTicketService {
                     "出站支付请求重试耗尽且无法定位设备：" + request.getIdempotencyKey());
             return false;
         }
-        PlatformUser systemReporter = userRepository.findByUsername(SystemAccountInitializer.SYSTEM_USERNAME)
-                .orElseThrow(() -> new IllegalStateException("系统账号缺失，无法创建对账差异工单"));
+        PlatformUser systemReporter = requireSystemReporter();
         FaultWorkOrder ticket = FaultWorkOrder.discrepancy(
                 equipment,
                 systemReporter.getId(),
@@ -177,9 +177,14 @@ public class PaymentDiscrepancyTicketService {
         return true;
     }
 
+    private PlatformUser requireSystemReporter() {
+        return userRepository.findByUsername(SystemAccountInitializer.SYSTEM_USERNAME)
+                .orElseThrow(() -> new IllegalStateException("系统账号缺失，无法创建对账差异工单"));
+    }
+
     private WorkOrderPriority priorityFor(ReconciliationDiscrepancy discrepancy) {
         long magnitude = Math.abs(discrepancy.deltaCents());
-        if (discrepancy.type() == DiscrepancyType.MISSING_LOCALLY || magnitude >= 10_000L) {
+        if (discrepancy.type() == DiscrepancyType.MISSING_LOCALLY || magnitude >= HIGH_PRIORITY_DELTA_CENTS) {
             return WorkOrderPriority.HIGH;
         }
         return WorkOrderPriority.MEDIUM;

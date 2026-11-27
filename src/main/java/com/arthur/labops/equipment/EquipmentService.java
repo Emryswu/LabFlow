@@ -1,6 +1,5 @@
 package com.arthur.labops.equipment;
 
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -28,11 +27,7 @@ public class EquipmentService {
 
     /** Unsettled reservations block retirement — including the ones with money in flight. */
     private static final Set<ReservationStatus> OPEN_RESERVATIONS = ReservationStatuses.OPEN;
-    private static final Set<WorkOrderStatus> ACTIVE_FAULT_WORK_ORDERS = EnumSet.of(
-            WorkOrderStatus.SUBMITTED,
-            WorkOrderStatus.ASSIGNED,
-            WorkOrderStatus.IN_PROGRESS,
-            WorkOrderStatus.RESOLVED);
+    private static final Set<WorkOrderStatus> ACTIVE_FAULT_WORK_ORDERS = WorkOrderStatus.ACTIVE;
 
     private final EquipmentRepository equipmentRepository;
     private final ReservationRepository reservationRepository;

@@ -1,8 +1,6 @@
 package com.arthur.labops.equipment;
 
 import java.time.Instant;
-import java.util.EnumSet;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,12 +16,6 @@ import com.arthur.labops.workorder.WorkOrderStatus;
  */
 @Service
 public class EquipmentStatusService {
-
-    private static final Set<WorkOrderStatus> ACTIVE_WORK_ORDERS = EnumSet.of(
-            WorkOrderStatus.SUBMITTED,
-            WorkOrderStatus.ASSIGNED,
-            WorkOrderStatus.IN_PROGRESS,
-            WorkOrderStatus.RESOLVED);
 
     private final EquipmentRepository equipmentRepository;
     private final FaultWorkOrderRepository workOrderRepository;
@@ -49,7 +41,7 @@ public class EquipmentStatusService {
         // leaves the equipment usable by design; deriving MAINTENANCE from every
         // active work order would undo that on the next scheduled sync.
         if (workOrderRepository.existsByEquipmentIdAndEquipmentTakenOfflineTrueAndStatusIn(
-                equipmentId, ACTIVE_WORK_ORDERS)) {
+                equipmentId, WorkOrderStatus.ACTIVE)) {
             equipment.forceStatus(EquipmentStatus.MAINTENANCE);
             return;
         }

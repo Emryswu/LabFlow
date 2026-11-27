@@ -9,7 +9,6 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -39,6 +38,7 @@ public class LocalLoginAttemptGuard implements LoginAttemptThrottle {
     }
 
     LocalLoginAttemptGuard(int maxPerIdentity, int maxPerIp, Duration window, int maxBuckets) {
+        LoginThrottleKeys.validateConfig(maxPerIdentity, maxPerIp, window);
         if (maxBuckets <= 0) {
             throw new IllegalArgumentException("maxBuckets must be positive");
         }
@@ -137,8 +137,7 @@ public class LocalLoginAttemptGuard implements LoginAttemptThrottle {
     }
 
     private static BusinessException limited() {
-        return new BusinessException("LOGIN_RATE_LIMITED", "登录尝试过于频繁，请稍后重试",
-                HttpStatus.TOO_MANY_REQUESTS);
+        return LoginThrottleKeys.rateLimited();
     }
 
     @Scheduled(fixedDelayString = "${labops.login.evict-interval:60000}")
