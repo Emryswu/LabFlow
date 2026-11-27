@@ -53,6 +53,15 @@ jobs:
     # 而 surefire 仍记为 skipped、CI 仍是绿灯 —— 即"假绿灯"。
     # 凭据必须与该测试 @DynamicPropertySource 的默认值一致。
     services:
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
       rabbitmq:
         image: rabbitmq:3.13-alpine
         env:
@@ -77,9 +86,30 @@ jobs:
           cache: maven
 
       # 默认 profile 仍走 H2、进程内锁与本地定时器，不需要 MySQL / Redis。
-      # 上面的 RabbitMQ service 只为让真实延迟队列顺序回归真正跑起来。
+      # RabbitMQ / Redis services 用于真实中间件回归，离线 job 仍不依赖它们。
       - name: 构建与测试
+        env:
+          LABFLOW_TEST_REDIS: "true"
         run: ./mvnw -B --no-transfer-progress verify
+
+      - name: 确认真实 Redis 登录限流并发回归已执行
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          report = Path("target/surefire-reports/TEST-com.arthur.labops.auth.RedisLoginAttemptGuardIntegrationTest.xml")
+          if not report.is_file():
+              raise SystemExit("缺少真实 Redis 登录限流测试报告")
+          suite = ET.parse(report).getroot()
+          cases = suite.findall("testcase")
+          bad = [case.get("name") for case in cases
+                 if any(case.find(tag) is not None for tag in ("skipped", "failure", "error"))]
+          if len(cases) < 3 or bad or any(int(suite.get(tag, "0")) for tag in ("skipped", "failures", "errors")):
+              raise SystemExit(f"真实 Redis 登录限流回归未完整通过：cases={len(cases)}, bad={bad}, totals={suite.attrib}")
+          print(f"真实 Redis 登录限流回归已执行：{len(cases)} 项全部通过，无 skipped")
+          PY
 
       # 只断言 tests>0 是不够的：被 assumeTrue 跳过时 surefire 同样记 tests="1"，
       # 只是同时记 skipped="1"。所以必须一并确认没有 skipped 元素，

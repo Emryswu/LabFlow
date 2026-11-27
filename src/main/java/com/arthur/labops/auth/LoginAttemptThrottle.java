@@ -6,9 +6,10 @@ package com.arthur.labops.auth;
  */
 public interface LoginAttemptThrottle {
 
-    void assertAllowed(String clientIp, String username);
+    /** Atomically checks both windows and reserves an in-flight attempt. */
+    String beginAttempt(String clientIp, String username);
 
-    void recordFailure(String clientIp, String username);
+    void recordFailure(String clientIp, String username, String attempt);
 
-    void recordSuccess(String clientIp, String username);
+    void recordSuccess(String clientIp, String username, String attempt);
 }

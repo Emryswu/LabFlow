@@ -33,37 +33,45 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
     private static final Logger log = LoggerFactory.getLogger(RedisLoginAttemptGuard.class);
     private static final String KEY_PREFIX = "labops:login:throttle:";
 
+    // Existing unprefixed members are failures from the previous implementation.
     static final DefaultRedisScript<Long> ASSERT_ALLOWED_SCRIPT = new DefaultRedisScript<>(
             "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', '(' .. ARGV[1]) "
                     + "if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then return 1 end "
                     + "redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', '(' .. ARGV[1]) "
                     + "if redis.call('ZCARD', KEYS[2]) >= tonumber(ARGV[3]) then return 2 end "
+                    + "for i=1,2 do "
+                    + "redis.call('ZADD', KEYS[i], tonumber(ARGV[4]), 'p:' .. ARGV[5]) "
+                    + "redis.call('PEXPIRE', KEYS[i], tonumber(ARGV[6])) end "
                     + "return 0",
             Long.class);
 
     static final DefaultRedisScript<Long> RECORD_FAILURE_SCRIPT = new DefaultRedisScript<>(
-            "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', '(' .. ARGV[1]) "
-                    + "redis.call('ZADD', KEYS[1], tonumber(ARGV[2]), ARGV[3]) "
-                    + "redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[4])) "
-                    + "redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', '(' .. ARGV[1]) "
-                    + "redis.call('ZADD', KEYS[2], tonumber(ARGV[2]), ARGV[3]) "
-                    + "redis.call('PEXPIRE', KEYS[2], tonumber(ARGV[4])) "
+            "for i=1,2 do "
+                    + "redis.call('ZREMRANGEBYSCORE', KEYS[i], '-inf', '(' .. ARGV[1]) "
+                    + "if redis.call('ZREM', KEYS[i], 'p:' .. ARGV[3]) == 1 then "
+                    + "redis.call('ZADD', KEYS[i], tonumber(ARGV[2]), 'f:' .. ARGV[3]) "
+                    + "redis.call('PEXPIRE', KEYS[i], tonumber(ARGV[4])) end end "
                     + "return 1",
             Long.class);
 
     static final DefaultRedisScript<Long> RECORD_SUCCESS_SCRIPT = new DefaultRedisScript<>(
-            "redis.call('DEL', KEYS[2]) "
-                    + "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', '(' .. ARGV[1]) "
-                    + "redis.call('ZPOPMIN', KEYS[1], 1) "
+            "for i=1,2 do redis.call('ZREMRANGEBYSCORE', KEYS[i], '-inf', '(' .. ARGV[1]) end "
+                    + "if redis.call('ZREM', KEYS[2], 'p:' .. ARGV[2]) == 0 then return 0 end "
+                    + "redis.call('ZREM', KEYS[1], 'p:' .. ARGV[2]) "
+                    + "for _,m in ipairs(redis.call('ZRANGE', KEYS[2], 0, -1)) do "
+                    + "if string.sub(m,1,2) ~= 'p:' then redis.call('ZREM', KEYS[2], m) end end "
+                    + "for _,m in ipairs(redis.call('ZRANGE', KEYS[1], 0, -1)) do "
+                    + "if string.sub(m,1,2) ~= 'p:' then redis.call('ZREM', KEYS[1], m) break end end "
                     + "return 1",
             Long.class);
 
     interface Commands {
-        Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp, int maxPerIdentity);
+        Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp, int maxPerIdentity,
+                          long nowMs, String member, long windowMs);
 
         void recordFailure(String ipKey, String identityKey, long cutoffMs, long nowMs, String member, long windowMs);
 
-        void recordSuccess(String ipKey, String identityKey, long cutoffMs);
+        void recordSuccess(String ipKey, String identityKey, long cutoffMs, String member);
     }
 
     private final Commands commands;
@@ -95,14 +103,15 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
     }
 
     @Override
-    public void assertAllowed(String clientIp, String username) {
+    public String beginAttempt(String clientIp, String username) {
         long now = clock.millis();
         long cutoff = now - windowMs;
         String ipKey = redisIpKey(clientIp);
         String idKey = redisIdentityKey(clientIp, username);
+        String attempt = UUID.randomUUID().toString();
         Long result;
         try {
-            result = commands.checkAllowed(ipKey, idKey, cutoff, maxPerIp, maxPerIdentity);
+            result = commands.checkAllowed(ipKey, idKey, cutoff, maxPerIp, maxPerIdentity, now, attempt, windowMs);
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(
                     "REDIS_UNAVAILABLE",
@@ -120,20 +129,20 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
                     "登录尝试过于频繁，请稍后重试",
                     HttpStatus.TOO_MANY_REQUESTS);
         }
+        return attempt;
     }
 
     @Override
-    public void recordFailure(String clientIp, String username) {
+    public void recordFailure(String clientIp, String username, String attempt) {
         long now = clock.millis();
         long cutoff = now - windowMs;
-        String member = UUID.randomUUID().toString();
         try {
             commands.recordFailure(
                     redisIpKey(clientIp),
                     redisIdentityKey(clientIp, username),
                     cutoff,
                     now,
-                    member,
+                    attempt,
                     windowMs);
         } catch (DataAccessException exception) {
             // Do not mask the 401 authentication failure already produced by AuthService.
@@ -142,10 +151,10 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
     }
 
     @Override
-    public void recordSuccess(String clientIp, String username) {
+    public void recordSuccess(String clientIp, String username, String attempt) {
         long cutoff = clock.millis() - windowMs;
         try {
-            commands.recordSuccess(redisIpKey(clientIp), redisIdentityKey(clientIp, username), cutoff);
+            commands.recordSuccess(redisIpKey(clientIp), redisIdentityKey(clientIp, username), cutoff, attempt);
         } catch (DataAccessException exception) {
             // Do not turn a completed login into 503 if Redis blips post-auth.
             log.warn("Failed to clear login throttle in Redis for ipKey={}", redisIpKey(clientIp), exception);
@@ -168,13 +177,14 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
         }
 
         @Override
-        public Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp, int maxPerIdentity) {
+        public Long checkAllowed(String ipKey, String identityKey, long cutoffMs, int maxPerIp, int maxPerIdentity,
+                                 long nowMs, String member, long windowMs) {
             return redisTemplate.execute(
                     ASSERT_ALLOWED_SCRIPT,
                     List.of(ipKey, identityKey),
                     Long.toString(cutoffMs),
                     Integer.toString(maxPerIp),
-                    Integer.toString(maxPerIdentity));
+                    Integer.toString(maxPerIdentity), Long.toString(nowMs), member, Long.toString(windowMs));
         }
 
         @Override
@@ -190,11 +200,11 @@ public class RedisLoginAttemptGuard implements LoginAttemptThrottle {
         }
 
         @Override
-        public void recordSuccess(String ipKey, String identityKey, long cutoffMs) {
+        public void recordSuccess(String ipKey, String identityKey, long cutoffMs, String member) {
             redisTemplate.execute(
                     RECORD_SUCCESS_SCRIPT,
                     List.of(ipKey, identityKey),
-                    Long.toString(cutoffMs));
+                    Long.toString(cutoffMs), member);
         }
     }
 }

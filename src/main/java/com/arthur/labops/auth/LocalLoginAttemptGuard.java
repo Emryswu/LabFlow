@@ -1,12 +1,10 @@
 package com.arthur.labops.auth;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,23 +15,20 @@ import org.springframework.stereotype.Component;
 
 import com.arthur.labops.common.BusinessException;
 
-/**
- * In-memory login throttle ({@code labops.login.mode=local}). Keys are IP+username
- * and IP, so one client cannot lock a victim on another IP, and rotating usernames
- * still hits the IP cap.
+/** Both buckets are admitted and settled under one monitor; password verification
+ * itself runs outside the monitor. Pending attempts count against the same limit
+ * as failed attempts, and a successful login cannot erase another pending attempt.
  */
 @Component
 @ConditionalOnProperty(name = "labops.login.mode", havingValue = "local", matchIfMissing = true)
 public class LocalLoginAttemptGuard implements LoginAttemptThrottle {
-
     static final int DEFAULT_MAX_BUCKETS = 10_000;
 
     private final int maxPerIdentity;
     private final int maxPerIp;
     private final long windowMs;
     private final int maxBuckets;
-    private final Object evictionLock = new Object();
-    private final ConcurrentHashMap<String, AttemptWindow> windows = new ConcurrentHashMap<>();
+    private final Map<String, AttemptWindow> windows = new HashMap<>();
 
     @Autowired
     public LocalLoginAttemptGuard(
@@ -54,99 +49,109 @@ public class LocalLoginAttemptGuard implements LoginAttemptThrottle {
     }
 
     @Override
-    public void assertAllowed(String clientIp, String username) {
+    public synchronized String beginAttempt(String clientIp, String username) {
         long now = System.currentTimeMillis();
-        // Only the two buckets this request actually consults are pruned here.
-        // Read existing buckets only: creating a per-username key on 429s would let
-        // an IP-capped client grow the map by rotating usernames.
-        if (snapshotCount(ipKey(clientIp), now) >= maxPerIp
-                || snapshotCount(identityKey(clientIp, username), now) >= maxPerIdentity) {
-            throw new BusinessException(
-                    "LOGIN_RATE_LIMITED",
-                    "登录尝试过于频繁，请稍后重试",
-                    HttpStatus.TOO_MANY_REQUESTS);
+        String ip = ipKey(clientIp);
+        String identity = identityKey(clientIp, username);
+        AttemptWindow ipWindow = prune(ip, now);
+        AttemptWindow idWindow = prune(identity, now);
+        if (count(ipWindow) >= maxPerIp || count(idWindow) >= maxPerIdentity) {
+            throw limited();
+        }
+        int required = (ipWindow == null ? 1 : 0) + (idWindow == null ? 1 : 0);
+        if (windows.size() + required > maxBuckets) {
+            evictExpiredWindows(now);
+            if (windows.size() + required > maxBuckets) {
+                // Never evict a live failure or in-flight reservation to admit an attacker.
+                throw limited();
+            }
+        }
+        String attempt = UUID.randomUUID().toString();
+        Hit hit = new Hit(now, true);
+        windows.computeIfAbsent(ip, key -> new AttemptWindow()).hits.put(attempt, hit);
+        windows.computeIfAbsent(identity, key -> new AttemptWindow()).hits.put(attempt, hit);
+        return attempt;
+    }
+
+    @Override
+    public synchronized void recordFailure(String clientIp, String username, String attempt) {
+        long now = System.currentTimeMillis();
+        fail(prune(ipKey(clientIp), now), attempt, now);
+        fail(prune(identityKey(clientIp, username), now), attempt, now);
+    }
+
+    private static void fail(AttemptWindow window, String attempt, long now) {
+        if (window == null) return;
+        Hit hit = window.hits.get(attempt);
+        if (hit != null && hit.pending()) {
+            window.hits.remove(attempt);
+            window.hits.put(attempt, new Hit(now, false));
         }
     }
 
     @Override
-    public void recordFailure(String clientIp, String username) {
+    public synchronized void recordSuccess(String clientIp, String username, String attempt) {
         long now = System.currentTimeMillis();
-        record(identityKey(clientIp, username), now);
-        record(ipKey(clientIp), now);
+        String ip = ipKey(clientIp);
+        String identity = identityKey(clientIp, username);
+        AttemptWindow idWindow = prune(identity, now);
+        AttemptWindow ipWindow = prune(ip, now);
+        if (idWindow == null) return;
+        Hit hit = idWindow.hits.get(attempt);
+        if (hit == null || !hit.pending()) return;
+        idWindow.hits.remove(attempt);
+        idWindow.hits.values().removeIf(value -> !value.pending());
+        if (ipWindow != null) {
+            ipWindow.hits.remove(attempt);
+            // Preserve the existing success decay of one oldest failed IP attempt.
+            var iterator = ipWindow.hits.values().iterator();
+            while (iterator.hasNext()) {
+                if (!iterator.next().pending()) {
+                    iterator.remove();
+                    break;
+                }
+            }
+        }
+        prune(identity, now);
+        prune(ip, now);
     }
 
-    @Override
-    public void recordSuccess(String clientIp, String username) {
-        windows.remove(identityKey(clientIp, username));
-        windows.computeIfPresent(ipKey(clientIp), (key, window) -> {
-            int remaining = window.decay(System.currentTimeMillis(), windowMs);
-            return remaining == 0 ? null : window;
-        });
-    }
-
-    int windowCount() {
+    synchronized int windowCount() {
         return windows.size();
     }
 
-    private void record(String key, long now) {
-        if (!windows.containsKey(key) && windows.size() >= maxBuckets) {
-            evictForCapacity(now);
+    private AttemptWindow prune(String key, long now) {
+        AttemptWindow window = windows.get(key);
+        if (window != null) {
+            window.hits.values().removeIf(hit -> now - hit.at() > windowMs);
+            if (window.hits.isEmpty()) {
+                windows.remove(key);
+                return null;
+            }
         }
-        windows.compute(key, (ignored, existing) -> {
-            AttemptWindow window = existing != null ? existing : new AttemptWindow();
-            window.add(now, windowMs);
-            return window;
-        });
+        return window;
     }
 
-    private int snapshotCount(String key, long now) {
-        return snapshotCount(key, now, true);
+    private static int count(AttemptWindow window) {
+        return window == null ? 0 : window.hits.size();
     }
 
-    private int snapshotCount(String key, long now, boolean touch) {
-        int[] count = {0};
-        windows.computeIfPresent(key, (ignored, window) -> {
-            int remaining = window.pruneAndCount(now, windowMs, touch);
-            count[0] = remaining;
-            return remaining == 0 ? null : window;
-        });
-        return count[0];
+    private static BusinessException limited() {
+        return new BusinessException("LOGIN_RATE_LIMITED", "登录尝试过于频繁，请稍后重试",
+                HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    /**
-     * Drops buckets whose attempts have all aged out. Runs on a timer instead of
-     * inside {@link #assertAllowed} so a login check stays O(1) no matter how many
-     * buckets a brute-force attempt has created.
-     */
     @Scheduled(fixedDelayString = "${labops.login.evict-interval:60000}")
-    void evictExpiredWindows() {
+    synchronized void evictExpiredWindows() {
         evictExpiredWindows(System.currentTimeMillis());
     }
 
     private void evictExpiredWindows(long now) {
-        for (String key : windows.keySet()) {
-            snapshotCount(key, now, false);
-        }
-    }
-
-    private void evictForCapacity(long now) {
-        synchronized (evictionLock) {
-            if (windows.size() < maxBuckets) {
-                return;
-            }
-            evictExpiredWindows(now);
-            if (windows.size() < maxBuckets) {
-                return;
-            }
-            int toRemove = windows.size() - maxBuckets + 1;
-            List<Map.Entry<String, AttemptWindow>> entries = new ArrayList<>(windows.entrySet());
-            entries.sort(Comparator.comparingLong(entry -> entry.getValue().lastActivityAt()));
-            for (int i = 0; i < entries.size() && toRemove > 0; i++) {
-                Map.Entry<String, AttemptWindow> victim = entries.get(i);
-                if (windows.remove(victim.getKey(), victim.getValue())) {
-                    toRemove--;
-                }
-            }
+        var iterator = windows.values().iterator();
+        while (iterator.hasNext()) {
+            AttemptWindow window = iterator.next();
+            window.hits.values().removeIf(hit -> now - hit.at() > windowMs);
+            if (window.hits.isEmpty()) iterator.remove();
         }
     }
 
@@ -158,41 +163,8 @@ public class LocalLoginAttemptGuard implements LoginAttemptThrottle {
         return LoginThrottleKeys.ipKey(clientIp);
     }
 
+    private record Hit(long at, boolean pending) {}
     private static final class AttemptWindow {
-        private final ArrayDeque<Long> times = new ArrayDeque<>();
-        private volatile long lastActivityAt;
-
-        synchronized int pruneAndCount(long now, long windowMs, boolean touch) {
-            while (!times.isEmpty() && now - times.peekFirst() > windowMs) {
-                times.pollFirst();
-            }
-            if (touch && !times.isEmpty() && now > lastActivityAt) {
-                lastActivityAt = now;
-            }
-            return times.size();
-        }
-
-        synchronized void add(long now, long windowMs) {
-            pruneAndCount(now, windowMs, false);
-            times.addLast(now);
-            if (now > lastActivityAt) {
-                lastActivityAt = now;
-            }
-        }
-
-        synchronized int decay(long now, long windowMs) {
-            pruneAndCount(now, windowMs, false);
-            if (!times.isEmpty()) {
-                times.pollFirst();
-            }
-            if (now > lastActivityAt) {
-                lastActivityAt = now;
-            }
-            return times.size();
-        }
-
-        long lastActivityAt() {
-            return lastActivityAt;
-        }
+        final Map<String, Hit> hits = new LinkedHashMap<>();
     }
 }
