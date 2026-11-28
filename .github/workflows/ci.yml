@@ -187,6 +187,23 @@ jobs:
           print(f"MySQL 关键并发回归已执行：{len(cases)} 项全部通过，无 skipped")
           PY
 
+      - name: 确认 MySQL 独立设备创建死锁回归已执行
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          report = Path("target/surefire-reports/TEST-com.arthur.labops.MysqlReservationCreateDeadlockTest.xml")
+          if not report.is_file():
+              raise SystemExit("缺少 MySQL 独立设备创建死锁回归报告")
+          suite = ET.parse(report).getroot()
+          cases = suite.findall("testcase")
+          if not any(c.get("name") == "independentCreatesAfterEmptyConflictReadsBothCommitWithoutDeadlock" for c in cases) or any(int(suite.get(k, "0")) for k in ("skipped", "failures", "errors")):
+              raise SystemExit(f"MySQL 独立设备创建死锁回归未完整通过：{suite.attrib}")
+          print("MySQL 独立设备创建死锁回归已执行且通过")
+          PY
+
       - name: 确认 MySQL 趋势查询计划回归已执行
         if: always()
         shell: bash
