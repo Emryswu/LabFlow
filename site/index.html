@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LabFlow · 实验室设备预约与故障工单</title>
+  <meta name="description" content="LabFlow 是面向高校实验室的设备预约与故障工单平台。本页只转述仓库里已经写明的实现和已合并的压测结果。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="https://github.com/Emryswu/LabFlow">
+      <span class="mark" aria-hidden="true"></span>
+      <span>LabFlow</span>
+    </a>
+    <nav>
+      <a href="#product">做什么</a>
+      <a href="#engineering">实现</a>
+      <a href="#screens">界面</a>
+      <a href="#benchmark">压测</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">Emryswu / LabFlow</p>
+      <h1>实验室设备预约与故障工单平台</h1>
+      <p class="lead">面向高校实验室：管台账、管预约、管报修。学生提交预约，教师审批，维修员处理故障，管理员看全局与审计。申请人一律取服务端登录用户。</p>
+      <p class="actions">
+        <a class="button" href="https://github.com/Emryswu/LabFlow">源代码</a>
+        <a class="button ghost" href="https://github.com/Emryswu/LabFlow/blob/main/benchmark/RESULTS.md">历史压测原文</a>
+      </p>
+    </section>
+
+    <section id="product">
+      <h2>能跑通的主流程</h2>
+      <div class="grid">
+        <article>
+          <h3>免费预约</h3>
+          <p>选设备与时段后进入 <code>PENDING</code>。重叠的待审批可以同时存在。教师批准后才是 <code>APPROVED</code>，真正占住时段。超时未批变为 <code>EXPIRED</code>，用完后 <code>COMPLETED</code>。</p>
+        </article>
+        <article>
+          <h3>计价预约</h3>
+          <p>设备 <code>hourlyPriceCents &gt; 0</code> 时，批准后进入 <code>AWAITING_PAYMENT</code>：占住时段，但支付窗口是 <code>min(now + 支付窗口, startTime)</code>，默认 10 分钟，不会越过开始时间。付清为 <code>PAID</code>。取消已支付预约时，仍有可退余额则进入 <code>REFUNDING</code>，到账后 <code>CANCELLED</code>。</p>
+        </article>
+        <article>
+          <h3>报修</h3>
+          <p>提交工单后，有权限的报修会取消冲突预约并让设备进入维护。管理员派单或维修员接单，处理、解决、关闭后设备恢复可预约。</p>
+        </article>
+        <article>
+          <h3>四个角色</h3>
+          <p>学生、教师、维修员、管理员。同一套界面按角色收窄导航。权限在服务端，不靠前端藏按钮。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="engineering">
+      <h2>仓库里已经落地的实现</h2>
+      <table>
+        <thead>
+          <tr><th>模块</th><th>实现</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>后端</td>
+            <td>Java 21、Spring Boot 3.5.16、Spring Security、JPA、Flyway。默认 H2；production 使用 MySQL、Redis、RabbitMQ。</td>
+          </tr>
+          <tr>
+            <td>前端</td>
+            <td>React 19.2、Next.js 16.2，由 vinext 构建。Node <code>&gt;=22.13.0</code>。</td>
+          </tr>
+          <tr>
+            <td>预约锁</td>
+            <td>可在进程内公平锁与 Redis <code>SET NX PX</code> 之间切换，按 UTC 日期分片。数据库设备行锁仍是正确性底线。Redis 不可用时返回 503，不降级成无锁。</td>
+          </tr>
+          <tr>
+            <td>行锁顺序</td>
+            <td>状态变更固定 Equipment → Reservation，多行预约按主键排序，避免和报修路径形成 ABBA。</td>
+          </tr>
+          <tr>
+            <td>超时</td>
+            <td>RabbitMQ 固定阶梯 TTL 分桶加死信，数据库补偿扫描兜底。支付窗口复用同一套分桶。</td>
+          </tr>
+          <tr>
+            <td>支付</td>
+            <td>仓库内的模拟渠道，不接真实支付。幂等流水、出站重试、晚到账退款和差账工单。</td>
+          </tr>
+          <tr>
+            <td>认证</td>
+            <td>JWT 加 Refresh Token 轮换。登录限流可在本地与 Redis 之间切换，Redis 故障时限流失败关闭。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">细节在 <a href="https://github.com/Emryswu/LabFlow/blob/main/README.md">README</a> 和 <a href="https://github.com/Emryswu/LabFlow/blob/main/docs/concurrency-notes.md">并发设计说明</a>。创建路径的应用锁在事务外面：先用户锁，再按日期分片的设备锁，然后才开写事务。</p>
+    </section>
+
+    <section id="screens">
+      <h2>界面</h2>
+      <p class="note">截图来自仓库 <code>docs/screenshots/</code>。README 写明它们由真实服务按角色登录截取：后端是默认 H2，演示种子为 8 台设备、4 条预约、3 条工单。收费预约截图额外通过 API 创建两条计价预约。</p>
+      <figure>
+        <img src="screenshots/02-dashboard-admin.png" alt="管理员运营总览：设备在册、待审批、开放工单和差账数字卡">
+        <figcaption>管理员运营总览。数字来自仪表盘接口，近 7 天趋势按服务器本地零点分桶。</figcaption>
+      </figure>
+      <div class="shots">
+        <figure>
+          <img src="screenshots/07-dashboard-student.png" alt="学生工作台，导航只保留学生入口">
+          <figcaption>学生工作台。导航按角色收窄。</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/04-reservations.png" alt="教师预约审批周历，重叠的待审批并排显示">
+          <figcaption>教师审批。待审批允许重叠，和已占时段冲突时会标出并禁用批准。</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/03-equipment.png" alt="设备中心表格">
+          <figcaption>设备中心。</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/09-reservations-payment.png" alt="学生确认收费预约的全额退款">
+          <figcaption>收费预约的付款与退款确认。</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/05-workorders.png" alt="故障工单列表">
+          <figcaption>故障工单。</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/06-audit.png" alt="管理员操作审计表">
+          <figcaption>操作审计，仅管理员可见。</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="benchmark">
+      <h2>已经合并到 main 的压测</h2>
+      <p>下面的数字全部来自 <a href="https://github.com/Emryswu/LabFlow/blob/main/benchmark/RESULTS.md"><code>benchmark/RESULTS.md</code></a>（生成时间 <code>2026-08-14T07:05:03Z</code>）。原文声明表内数字没有改过，也没有估算。原始 JSON 和日志在 <code>benchmark/results/</code> 与 <code>benchmark/logs/</code>。</p>
+      <h3>环境</h3>
+      <ul>
+        <li>CPU：13th Gen Intel Core i9-13980HX，24 物理核 / 32 逻辑核，内存 31.63 GB</li>
+        <li>系统：Windows 11 家庭中文版 10.0.26200</li>
+        <li>Java 25.0.2，压测客户端 Python 3.14.0</li>
+        <li>一组是默认 profile：H2 内存库 + 进程内锁。另一组是 production：MySQL 8.4 + Redis 7.4。服务没有调大 Tomcat 线程或 Hikari 连接池。</li>
+      </ul>
+      <h3>正确性</h3>
+      <p>同一设备、同一时段，N = 50 / 100 / 200，每档 3 轮。H2 与 MySQL + Redis 都是 9/9 轮恰好 1 个 HTTP 201，其余 409，0 失败。没有出现超过 1 个 201。</p>
+      <p class="note">这是当时创建接口也把待审批重叠当成冲突时的结果。当前语义允许多条重叠 <code>PENDING</code> 并存，冲突发生在审批。所以这组「恰好一条 201」不能拿来判断现在的创建接口。</p>
+      <h3>互不冲突时的整栈延迟</h3>
+      <p>每个 worker 独占一台设备，各 500 个请求。这组比争用场景更接近「一次预约有多贵」，但两边仍是整套栈，不是只换锁。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>并发</th>
+            <th>H2 + 本地锁 P99</th>
+            <th>MySQL + Redis P99</th>
+            <th>H2 + 本地锁吞吐</th>
+            <th>MySQL + Redis 吞吐</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>50</td>
+            <td>41.439 ms</td>
+            <td>375.849 ms</td>
+            <td>1838.716 req/s</td>
+            <td>174.032 req/s</td>
+          </tr>
+          <tr>
+            <td>100</td>
+            <td>85.063 ms</td>
+            <td>614.726 ms</td>
+            <td>1887.344 req/s</td>
+            <td>184.343 req/s</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">报告自己的读法：未争用路径上 MySQL + Redis 大约 10 倍延迟、约十分之一吞吐。其中有跨进程数据库、Docker/WSL 网络和 Redis 往返，不能全部记在 Redis 锁上。</p>
+      <h3>同一 MySQL 上只切换锁</h3>
+      <p>这组已经合并。测量的代码是 <code>a6684f3aa7eb7905c2a735201509f6e6b34e7cd5</code>，报告在 <a href="https://github.com/Emryswu/LabFlow/blob/main/benchmark/AB-RESULTS.md"><code>benchmark/AB-RESULTS.md</code></a>，原始文件在 <code>benchmark/ab-results/20261128T161209Z/</code>。同一台 MySQL 8.4.13、同一份库快照、同一个 JAR，只改 <code>--labops.reservation-lock.mode</code>。机器是 4 vCPU 的云虚拟机，内存 <code>free -b</code> 总计 16780623872 字节。没有为某一组改连接池或 Tomcat。</p>
+      <p>争用场景是 32 个学生预约同一台新设备。三轮两边都是 32 个 HTTP 201，没有 <code>RESERVATION_LOCK_TIMEOUT</code>。成功 P50：本地锁 241.345 / 238.243 / 243.291 ms，Redis 305.866 / 373.533 / 475.736 ms。</p>
+      <p>各自一台设备时，本地锁三轮都是 32/32，成功 P50 为 189.024 / 178.314 / 167.166 ms。Redis 第 2、3 轮是 32/32，P50 为 227.972 / 200.252 ms。第 1 轮 Redis 是 28 个 201 和 4 个 409 <code>RESOURCE_BUSY</code>，客户端记为无效，没有重跑。日志里这 4 次是 MySQL 死锁，不是 Redis 锁等待超时。18 次预热里有 17 次也有一次同样的死锁。</p>
+      <p>审批 6 轮都是恰好 1 个 HTTP 200 和 7 个 <code>RESERVATION_CONFLICT</code>。批准走数据库行锁，不走这层应用锁。</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>LabFlow 以 MIT 许可证发布。本页只展示这一个项目，材料来自该仓库的 README、并发说明、界面截图和已合并的压测报告。</p>
+  </footer>
+</body>
+</html>

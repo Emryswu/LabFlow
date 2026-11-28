@@ -1,0 +1,89 @@
+name: GitHub Pages
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/screenshots/**"
+      - ".github/workflows/pages.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "site/**"
+      - "docs/screenshots/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 展示站内容检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 核对页面只引用仓库里的材料
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          page = Path("site/index.html").read_text(encoding="utf-8")
+          css = Path("site/styles.css").read_text(encoding="utf-8")
+          required = [
+              "实验室设备预约与故障工单平台",
+              "Spring Boot 3.5.16",
+              "Next.js 16.2",
+              "i9-13980HX",
+              "41.439 ms",
+              "375.849 ms",
+              "1838.716 req/s",
+              "174.032 req/s",
+              "benchmark/RESULTS.md",
+              "不能全部记在 Redis 锁上",
+              "241.345 / 238.243 / 243.291 ms",
+              "305.866 / 373.533 / 475.736 ms",
+              "a6684f3aa7eb7905c2a735201509f6e6b34e7cd5",
+              "RESOURCE_BUSY",
+              "screenshots/02-dashboard-admin.png",
+          ]
+          missing = [item for item in required if item not in page]
+          if missing:
+              raise SystemExit("页面缺少仓库中的既有事实：" + "、".join(missing))
+          if "--accent: #e8621a" not in css:
+              raise SystemExit("展示站颜色未沿用前端 :root 的品牌色")
+          for shot in Path("docs/screenshots").glob("*.png"):
+              name = shot.name
+              if name not in page and name not in {"01-login.png", "08-workorders-technician.png"}:
+                  raise SystemExit(f"截图 {name} 未出现在展示站")
+          print("展示站内容检查通过")
+          PY
+
+  deploy:
+    name: 发布到 GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 组装站点
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site/screenshots
+          cp site/index.html site/styles.css _site/
+          cp docs/screenshots/*.png _site/screenshots/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
