@@ -13,7 +13,9 @@
 | 支付可靠性 | 模拟渠道、幂等流水、出站持久化重试、晚到账退款与差账工单；不连接真实支付渠道 |
 | 认证与交付 | JWT + Refresh Token 轮换、角色鉴权、限流；H2 一键演示，MySQL / Redis / RabbitMQ production profile |
 
-**快速入口：** [一键演示脚本（H2）](start-fullstack.ps1) · [CI 与测试](.github/workflows/ci.yml) · [历史压测及原始数据](benchmark/RESULTS.md)。
+**项目展示站：** https://emryswu.github.io/LabFlow/ （页面在 `site/`，由 `.github/workflows/pages.yml` 用 GitHub Actions 发布）。
+
+**快速入口：** [一键演示脚本（H2）](start-fullstack.ps1) · [CI 与测试](.github/workflows/ci.yml) · [历史压测及原始数据](benchmark/RESULTS.md) · [同一 MySQL 的锁对照](benchmark/AB-RESULTS.md)。
 
 ## 界面预览
 
