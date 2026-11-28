@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -85,7 +86,9 @@ public class ReservationService {
         this.equipmentStatusService = equipmentStatusService;
     }
 
-    @Transactional
+    // User and equipment PK locks serialize quota and slot mutations. RR range
+    // locks on an empty conflict index can deadlock independent equipment inserts.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservationResponse create(CreateReservationRequest request) {
         Instant now = Instant.now();
         validateTimeWindow(request.startTime(), request.endTime(), now);
@@ -102,7 +105,7 @@ public class ReservationService {
         return ReservationResponse.from(saved);
     }
 
-    @Transactional(noRollbackFor = ReservationAlreadyExpiredException.class)
+    @Transactional(isolation = Isolation.READ_COMMITTED, noRollbackFor = ReservationAlreadyExpiredException.class)
     public ReservationResponse decide(Long reservationId, ReservationDecisionRequest request) {
         PlatformUser actor = currentUserService.getRequiredUser();
         assertTeacherOrAdmin(actor);
@@ -483,11 +486,10 @@ public class ReservationService {
     }
 
     private void assertNoConflict(Long equipmentId, Instant start, Instant end, Long excludeId) {
-        // This must be a locking/current read. Under MySQL REPEATABLE READ the
-        // authentication and routing lookups may already have opened a snapshot
-        // before this transaction waits for the equipment row. An ordinary
-        // exists query would keep reading that old snapshot after the wait and
-        // could approve a slot committed by the previous equipment-row owner.
+        // The caller owns the equipment PK lock, so other slot writers cannot
+        // introduce a conflicting reservation until this transaction completes.
+        // Keep the current read; READ_COMMITTED avoids RR gap locking on the
+        // conflict range, including ranges that contain no reservations.
         if (!reservationRepository.findConflictsForUpdate(
                 equipmentId, OCCUPIED_STATUSES, end, start, excludeId).isEmpty()) {
             throw new BusinessException(
