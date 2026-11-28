@@ -39,8 +39,10 @@ def batch(tasks):
 
     with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
         futures = [pool.submit(worker, task) for task in tasks]
-        start = time.perf_counter()
+        # Threads may take measurable time to reach the barrier. The wall clock
+        # starts only once every measured request is released together.
         ready.wait(timeout=60)
+        start = time.perf_counter()
         rows = [f.result() for f in futures]
         wall = time.perf_counter() - start
     return rows, wall
@@ -65,23 +67,44 @@ def summarize(rows, wall, success_status):
 
 
 def list_reservations(api, token, equipment_id):
+    """Read every reservation for one equipment item.
+
+    Offset pages sorted by a non-unique column can skip or repeat rows. ``id`` is
+    unique, and the API caps page size at 100, so overlap is dropped rather than
+    counted twice.
+    """
     page = 0
     rows = []
+    seen = set()
     while True:
-        query = urlencode({"equipmentId": equipment_id, "page": page, "size": 20})
+        query = urlencode({
+            "equipmentId": equipment_id,
+            "page": page,
+            "size": 100,
+            "sort": "id,asc",
+        })
         data = expect(request(api, token, "GET", "/api/reservations?" + query), 200)
-        rows.extend(data["content"])
+        content = data["content"]
+        for row in content:
+            if row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            rows.append(row)
         page += 1
-        if page >= data["totalPages"]:
+        if not content or page >= data["totalPages"]:
             return rows
 
 
-def approval_ok(rows, persisted):
+def approval_ok(rows, persisted, expected_ids):
     winners = [r for r in rows if r["http"] == 200 and r["state"] == "APPROVED"]
     approved = [r["id"] for r in persisted if r["status"] == "APPROVED"]
-    return (len(rows) >= 2 and len(winners) == 1 and approved == [winners[0]["id"]]
-            and len(persisted) == len(rows)
-            and all(r["status"] in {"APPROVED", "PENDING"} for r in persisted)
+    persisted_ids = [r["id"] for r in persisted]
+    winner_id = winners[0]["id"] if len(winners) == 1 else None
+    return (len(rows) >= 2 and len(winners) == 1 and approved == [winner_id]
+            and winner_id in expected_ids
+            and sorted(persisted_ids) == sorted(expected_ids)
+            and all((r["status"] == "APPROVED") if r["id"] == winner_id else r["status"] == "PENDING"
+                    for r in persisted)
             and all(r is winners[0] or (r["http"] == 409 and r["code"] == "RESERVATION_CONFLICT")
                     for r in rows))
 
@@ -116,7 +139,7 @@ def run(args, credentials):
                             f"/api/reservations/{rid}/decision", {"decision": "APPROVED"}))
                             for rid in ids])
         persisted = list_reservations(api, admin, equipment[0])
-        valid = approval_ok(rows, persisted)
+        valid = approval_ok(rows, persisted, ids)
         result = summarize(rows, wall, 200)
         result["setup"] = prepared
     else:
