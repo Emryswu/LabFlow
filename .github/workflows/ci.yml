@@ -78,6 +78,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 压测客户端单元测试（不启动服务）
+        run: python3 -m unittest discover -s benchmark -p test_bench_lock_ab.py
+
       - name: 准备 JDK 21
         uses: actions/setup-java@v4
         with:
