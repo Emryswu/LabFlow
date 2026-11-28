@@ -4,6 +4,17 @@
 
 面向高校实验室的设备运营系统：管台账、管预约、管报修。学生提交预约，教师审批，维修员处理故障，管理员看全局与审计。
 
+**工程亮点**
+
+| 模块 | 实现与验证 |
+| --- | --- |
+| 预约并发 | 本地锁 / Redis 锁可切换，按 UTC 日期分片，数据库行锁保障状态与时段冲突；[并发设计与回归用例](docs/concurrency-notes.md) |
+| 延迟任务 | RabbitMQ 固定阶梯 TTL 分桶 + DLX，数据库补偿扫描；CI 使用真实 broker 验证短延时不被长延时阻塞 |
+| 支付可靠性 | 模拟渠道、幂等流水、出站持久化重试、晚到账退款与差账工单；不连接真实支付渠道 |
+| 认证与交付 | JWT + Refresh Token 轮换、角色鉴权、限流；H2 一键演示，MySQL / Redis / RabbitMQ production profile |
+
+**快速入口：** [一键演示脚本（H2）](start-fullstack.ps1) · [CI 与测试](.github/workflows/ci.yml) · [历史压测及原始数据](benchmark/RESULTS.md)。
+
 ## 界面预览
 
 > 以下截图全部来自真实运行的服务：后端以默认 H2 profile 启动（与 `.\start-fullstack.ps1` 相同配置，零外部中间件），
@@ -102,6 +113,18 @@ ReservationApplicationService.create
 
 压测数据在 [`benchmark/RESULTS.md`](benchmark/RESULTS.md)。那组「同一时段只成功一条」是当时创建也把 `PENDING` 当冲突时的结果；现在冲突发生在审批，不是创建。
 
+### 锁性能 A/B 复测计划（尚未执行）
+
+历史报告对比的是 H2 + 本地锁与 MySQL + Redis 锁两套完整栈，不能将延迟差异归因于 Redis 锁本身。要隔离锁实现的成本，下一次复测按以下口径执行：
+
+1. 使用同一提交、同一 JAR、同一台机器、同版本 MySQL / Redis / RabbitMQ，均使用 production profile；只切换启动参数 `--labops.reservation-lock.mode=local` 与 `--labops.reservation-lock.mode=redis`。保持其他配置、连接池、线程数与数据规模一致。
+2. 使用独立的本地测试数据库和演示账号；每轮从等价初始数据开始，预热后交替执行两种锁模式。单实例测量锁实现开销，多实例测试另行报告，不混用。
+3. 正确性场景按当前业务语义设计：预建重叠的 PENDING 预约，再并发审批，核对最多一条成功及数据库最终占用状态。不能继续用历史脚本对创建接口的「恰好一条 201」断言来判定当前正确性。
+4. 性能场景分别覆盖同设备争用和不同设备／日期的非争用请求，固定并发数、请求数、轮次与请求分布。记录各状态码计数、P50 / P95 / P99、吞吐及失败数，并区分所有响应吞吐与成功操作吞吐。
+5. 保存被测 commit、运行配置、原始 JSON、日志及数据库不变量检查结果；新结果单独存档，不覆盖旧报告。现有 [Python 压测客户端](benchmark/bench_reservation.py) 可作为实现参考，审批场景需要适配后再运行。
+
+当前尚无以上单变量 A/B 实测数据，历史数值仅用于说明旧版本完整栈表现。
+
 ## 超时过期（RabbitMQ）
 
 production：`labops.reservation-expiry.mode=rabbit`。
@@ -114,7 +137,7 @@ production：`labops.reservation-expiry.mode=rabbit`。
 
 **支付窗口复用同一套固定分桶延时设施**，载荷以 `PAYMENT:` 前缀区分业务类型。在共享固定分桶拓扑下，`cancel` 为轻量 no-op（不再删除共享桶队列），已决预约通过监听器的懒式状态检查提前停止级联并在实体状态守卫下保持幂等安全。
 
-本地默认 `expiry.mode=local`，不需要 broker。旧的共享 FIFO delay queue 启动时会清掉。真 broker 上的 HOL 验证见 `RabbitReservationExpiryOrderingIntegrationTest`（本机 `5672` 不通则跳过）。
+本地默认 `expiry.mode=local`，不需要 broker。旧的共享 FIFO delay queue 启动时会清掉。真 broker 上的 HOL 验证见 `RabbitReservationExpiryOrderingIntegrationTest`（本机 `5672` 不通则跳过）。 [CI](.github/workflows/ci.yml) 会启动 RabbitMQ service 并检查 Surefire 报告存在、测试已执行且无 skipped，避免把缺少 broker 的跳过结果当成集成测试通过。
 
 ## 支付与对账
 
