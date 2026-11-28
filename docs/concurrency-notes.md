@@ -54,6 +54,14 @@ H2 can verify: both threads return, no 500, and (with `@Version`) no silent lost
 
 This change removes the identified `Equipment <-> Reservation` lock-order inversion. It does not claim that every possible database deadlock is impossible; future code that introduces new multi-entity locking should preserve the same global ordering rule.
 
+## Independent reservation creation: InnoDB index gaps
+
+The A/B report records MySQL 1213 errors in the conflict-range locking read and reservation insert, including 17/18 independent-device warmups. A plausible mechanism is compatible RR gap locks acquired by two empty conflict scans, followed by incompatible insert intentions in the same index gap. The original application logs do not include the InnoDB deadlock graph, so they alone cannot prove the exact index involved.
+
+Creation and approval use transaction-scoped `READ_COMMITTED` to avoid search/index-scan gap locking while retaining `FOR UPDATE` for conflict checks. The connection pool default is unchanged. Slot writers still acquire the equipment primary-key row before changing reservations; creation additionally locks the requester primary-key row before counting the quota. These existing guards serialize overlapping writes even when the conflict search returns no rows; correctness does not depend on locking an empty range. Foreign-key and duplicate-key checks can still take gap locks, so this is not a general guarantee against all deadlocks.
+
+The regression `MysqlReservationCreateDeadlockTest` holds two transactions after their real conflict reads in a fresh MySQL container, releases both inserts, checks that both requests return 201, both PENDING rows are persisted, and the engine deadlock counter does not increase. The existing overlapping-approval and other MySQL regressions remain required. CI checks the new test is not skipped. Historical A/B results are retained unchanged; any post-fix measurements must be recorded separately.
+
 ## Refresh-token families
 
 Refresh/logout refresh-token state transactions are concentrated in `AuthRefreshTx`. `AuthService.login()` runs without an outer `@Transactional` so slow BCrypt password verification does not hold a database connection; only `AuthRefreshTx.issueLoginSession` opens a short write transaction. Auth writers (refresh, logout, family-wide reuse revocation) are a separate lock tree from reservations. They must not acquire equipment or reservation row locks.
