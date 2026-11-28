@@ -1,0 +1,10 @@
+java
+-jar
+/workspace/target/lab-equipment-platform-0.0.1-SNAPSHOT.jar
+--spring.profiles.active=production
+--server.address=127.0.0.1
+--server.port=18080
+--labops.reservation-lock.mode=redis
+--labops.demo-users.enabled=true
+--labops.demo-data.enabled=false
+--labops.jwt.refresh-cookie-secure=false

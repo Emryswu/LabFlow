@@ -1,0 +1,468 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-11-28T16:13:25.528Z  INFO 16403 --- [lab-equipment-platform] [           main] c.a.l.LabEquipmentPlatformApplication    : Starting LabEquipmentPlatformApplication v0.0.1-SNAPSHOT using Java 21.0.13.0.3 with PID 16403 (/workspace/target/lab-equipment-platform-0.0.1-SNAPSHOT.jar started by ubuntu in /workspace)
+2026-11-28T16:13:25.530Z  INFO 16403 --- [lab-equipment-platform] [           main] c.a.l.LabEquipmentPlatformApplication    : The following 1 profile is active: "production"
+2026-11-28T16:13:26.392Z  INFO 16403 --- [lab-equipment-platform] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-11-28T16:13:26.393Z  INFO 16403 --- [lab-equipment-platform] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-11-28T16:13:26.490Z  INFO 16403 --- [lab-equipment-platform] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 91 ms. Found 10 JPA repository interfaces.
+2026-11-28T16:13:26.887Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 18080 (http)
+2026-11-28T16:13:26.898Z  INFO 16403 --- [lab-equipment-platform] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-28T16:13:26.898Z  INFO 16403 --- [lab-equipment-platform] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.55]
+2026-11-28T16:13:26.917Z  INFO 16403 --- [lab-equipment-platform] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-11-28T16:13:26.918Z  INFO 16403 --- [lab-equipment-platform] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1361 ms
+2026-11-28T16:13:27.155Z  INFO 16403 --- [lab-equipment-platform] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-11-28T16:13:27.279Z  INFO 16403 --- [lab-equipment-platform] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@1dcca426
+2026-11-28T16:13:27.280Z  INFO 16403 --- [lab-equipment-platform] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-11-28T16:13:27.315Z  INFO 16403 --- [lab-equipment-platform] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:mysql://127.0.0.1:3306/labops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8 (MySQL 8.4)
+2026-11-28T16:13:27.392Z  WARN 16403 --- [lab-equipment-platform] [           main] o.f.c.internal.database.base.Database    : Flyway upgrade recommended: MySQL 8.4 is newer than this version of Flyway and support has not been tested. The latest supported version of MySQL is 8.1.
+2026-11-28T16:13:27.425Z  INFO 16403 --- [lab-equipment-platform] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 21 migrations (execution time 00:00.025s)
+2026-11-28T16:13:27.434Z  INFO 16403 --- [lab-equipment-platform] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema `labops`: 21
+2026-11-28T16:13:27.436Z  INFO 16403 --- [lab-equipment-platform] [           main] o.f.core.internal.command.DbMigrate      : Schema `labops` is up to date. No migration necessary.
+2026-11-28T16:13:27.486Z  INFO 16403 --- [lab-equipment-platform] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-11-28T16:13:27.522Z  INFO 16403 --- [lab-equipment-platform] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.53.Final
+2026-11-28T16:13:27.542Z  INFO 16403 --- [lab-equipment-platform] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-11-28T16:13:27.701Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-11-28T16:13:27.737Z  WARN 16403 --- [lab-equipment-platform] [           main] org.hibernate.orm.deprecation            : HHH90000025: MySQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-11-28T16:13:27.746Z  INFO 16403 --- [lab-equipment-platform] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 8.4.13
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-11-28T16:13:28.371Z  INFO 16403 --- [lab-equipment-platform] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-11-28T16:13:28.397Z  INFO 16403 --- [lab-equipment-platform] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-11-28T16:13:28.569Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-11-28T16:13:28.947Z  INFO 16403 --- [lab-equipment-platform] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name databaseUserDetailsService
+2026-11-28T16:13:30.025Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-11-28T16:13:30.318Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 18080 (http) with context path '/'
+2026-11-28T16:13:30.319Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [127.0.0.1:5672]
+2026-11-28T16:13:30.344Z  INFO 16403 --- [lab-equipment-platform] [           main] o.s.a.r.c.CachingConnectionFactory       : Created new connection: rabbitConnectionFactory#50187377:0/SimpleConnection@66c10c43 [delegate=amqp://labops@127.0.0.1:5672/, localPort=55486]
+2026-11-28T16:13:30.387Z  INFO 16403 --- [lab-equipment-platform] [           main] c.a.l.LabEquipmentPlatformApplication    : Started LabEquipmentPlatformApplication in 5.142 seconds (process running for 5.435)
+2026-11-28T16:13:30.493Z  WARN 16403 --- [lab-equipment-platform] [           main] c.a.l.r.e.LegacySharedDelayQueueCleanup  : Deleted legacy shared delay queue labops.reservation.expiry.delay.queue (replaced by per-reservation delay queues to avoid HOL blocking)
+2026-11-28T16:13:30.516Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-11-28T16:13:30.517Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-11-28T16:13:30.517Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-11-28T16:13:31.451Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:7
+2026-11-28T16:13:31.452Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:8
+2026-11-28T16:13:31.453Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:2:day:20789
+2026-11-28T16:13:31.453Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:1:day:20789
+2026-11-28T16:13:31.476Z  WARN 16403 --- [lab-equipment-platform] [.1-18080-exec-7] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 1213, SQLState: 40001
+2026-11-28T16:13:31.476Z ERROR 16403 --- [lab-equipment-platform] [.1-18080-exec-7] o.h.engine.jdbc.spi.SqlExceptionHelper   : Deadlock found when trying to get lock; try restarting transaction
+2026-11-28T16:13:31.483Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:1:day:20789
+2026-11-28T16:13:31.483Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:7
+2026-11-28T16:13:31.486Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=1 remainingMs=899972 bucketMs=300000 deadline=2026-11-28T16:28:31.453757949Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:31.487Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:2:day:20789
+2026-11-28T16:13:31.488Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:8
+2026-11-28T16:13:31.485Z  WARN 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.common.GlobalExceptionHandler      : Lock failure
+
+org.springframework.dao.CannotAcquireLockException: could not execute statement [Deadlock found when trying to get lock; try restarting transaction] [insert into equipment_reservations (created_at,end_time,equipment_id,expires_at,payment_deadline,purpose,requester_id,requester_name,start_time,status,version) values (?,?,?,?,?,?,?,?,?,?,?)]; SQL [insert into equipment_reservations (created_at,end_time,equipment_id,expires_at,payment_deadline,purpose,requester_id,requester_name,start_time,status,version) values (?,?,?,?,?,?,?,?,?,?,?)]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:287) ~[spring-orm-6.2.19.jar!/:6.2.19]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:256) ~[spring-orm-6.2.19.jar!/:6.2.19]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:244) ~[spring-orm-6.2.19.jar!/:6.2.19]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.translateExceptionIfPossible(AbstractEntityManagerFactoryBean.java:560) ~[spring-orm-6.2.19.jar!/:6.2.19]
+	at org.springframework.dao.support.ChainedPersistenceExceptionTranslator.translateExceptionIfPossible(ChainedPersistenceExceptionTranslator.java:61) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.dao.support.DataAccessUtils.translateIfNecessary(DataAccessUtils.java:343) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:160) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.data.jpa.repository.support.CrudMethodMetadataPostProcessor$CrudMethodMetadataPopulatingMethodInterceptor.invoke(CrudMethodMetadataPostProcessor.java:165) ~[spring-data-jpa-3.5.13.jar!/:3.5.13]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:223) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at jdk.proxy2/jdk.proxy2.$Proxy173.save(Unknown Source) ~[na:na]
+	at com.arthur.labops.reservation.ReservationService.saveNewReservation(ReservationService.java:162) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.ReservationService.create(ReservationService.java:97) ~[!/:0.0.1-SNAPSHOT]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:360) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:380) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:728) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at com.arthur.labops.reservation.ReservationService$$SpringCGLIB$$0.create(<generated>) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.ReservationApplicationService.lambda$create$0(ReservationApplicationService.java:34) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.lock.RedisReservationLock.executeKeys(RedisReservationLock.java:105) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.lock.RedisReservationLock.executeWindow(RedisReservationLock.java:80) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.ReservationApplicationService.lambda$create$2(ReservationApplicationService.java:30) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.lock.RedisReservationLock.executeKeys(RedisReservationLock.java:105) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.lock.RedisReservationLock.executeUser(RedisReservationLock.java:85) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.ReservationApplicationService.create(ReservationApplicationService.java:26) ~[!/:0.0.1-SNAPSHOT]
+	at com.arthur.labops.reservation.ReservationController.create(ReservationController.java:38) ~[!/:0.0.1-SNAPSHOT]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:258) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:191) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:991) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:896) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:193) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51) ~[tomcat-embed-websocket-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:110) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$3(FilterChainProxy.java:231) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:490) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:351) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:83) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:129) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:101) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:125) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:119) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:131) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:85) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:179) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at com.arthur.labops.auth.JwtAuthenticationFilter.doFilterInternal(JwtAuthenticationFilter.java:63) ~[!/:0.0.1-SNAPSHOT]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:107) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:93) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:241) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:334) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:225) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:138) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:233) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:191) ~[spring-security-web-6.5.11.jar!/:6.5.11]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:319) ~[spring-security-config-6.5.11.jar!/:6.5.11]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.servlet.handler.HandlerMappingIntrospector.lambda$createCacheFilter$4(HandlerMappingIntrospector.java:267) ~[spring-webmvc-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.security.config.annotation.web.configuration.WebMvcSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebMvcSecurityConfiguration.java:240) ~[spring-security-config-6.5.11.jar!/:6.5.11]
+	at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:362) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:278) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:110) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.2.19.jar!/:6.2.19]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:88) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:492) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:113) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:83) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:72) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:342) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:399) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:1272) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1797) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:973) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.55.jar!/:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: org.hibernate.exception.LockAcquisitionException: could not execute statement [Deadlock found when trying to get lock; try restarting transaction] [insert into equipment_reservations (created_at,end_time,equipment_id,expires_at,payment_deadline,purpose,requester_id,requester_name,start_time,status,version) values (?,?,?,?,?,?,?,?,?,?,?)]
+	at org.hibernate.dialect.MySQLDialect.lambda$buildSQLExceptionConversionDelegate$3(MySQLDialect.java:1255) ~[hibernate-core-6.6.53.Final.jar!/:na]
+	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:197) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.id.insert.GetGeneratedKeysDelegate.performMutation(GetGeneratedKeysDelegate.java:116) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.jdbc.mutation.internal.MutationExecutorSingleNonBatched.performNonBatchedOperations(MutationExecutorSingleNonBatched.java:47) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.execute(AbstractMutationExecutor.java:55) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.persister.entity.mutation.InsertCoordinatorStandard.doStaticInserts(InsertCoordinatorStandard.java:194) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.persister.entity.mutation.InsertCoordinatorStandard.coordinateInsert(InsertCoordinatorStandard.java:132) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.persister.entity.mutation.InsertCoordinatorStandard.insert(InsertCoordinatorStandard.java:95) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.action.internal.EntityIdentityInsertAction.execute(EntityIdentityInsertAction.java:85) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.spi.ActionQueue.execute(ActionQueue.java:682) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.spi.ActionQueue.addResolvedEntityInsertAction(ActionQueue.java:293) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.spi.ActionQueue.addInsertAction(ActionQueue.java:274) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.engine.spi.ActionQueue.addAction(ActionQueue.java:324) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.AbstractSaveEventListener.addInsertAction(AbstractSaveEventListener.java:394) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.AbstractSaveEventListener.performSaveOrReplicate(AbstractSaveEventListener.java:308) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.AbstractSaveEventListener.performSave(AbstractSaveEventListener.java:224) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.AbstractSaveEventListener.saveWithGeneratedId(AbstractSaveEventListener.java:136) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.DefaultPersistEventListener.entityIsTransient(DefaultPersistEventListener.java:177) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.DefaultPersistEventListener.persist(DefaultPersistEventListener.java:95) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.DefaultPersistEventListener.onPersist(DefaultPersistEventListener.java:79) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.internal.DefaultPersistEventListener.onPersist(DefaultPersistEventListener.java:55) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.event.service.internal.EventListenerGroupImpl.fireEventOnEachListener(EventListenerGroupImpl.java:127) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.internal.SessionImpl.firePersist(SessionImpl.java:761) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at org.hibernate.internal.SessionImpl.persist(SessionImpl.java:745) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.orm.jpa.SharedEntityManagerCreator$SharedEntityManagerInvocationHandler.invoke(SharedEntityManagerCreator.java:320) ~[spring-orm-6.2.19.jar!/:6.2.19]
+	at jdk.proxy2/jdk.proxy2.$Proxy152.persist(Unknown Source) ~[na:na]
+	at org.springframework.data.jpa.repository.support.SimpleJpaRepository.save(SimpleJpaRepository.java:654) ~[spring-data-jpa-3.5.13.jar!/:3.5.13]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:360) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.data.repository.core.support.RepositoryMethodInvoker$RepositoryFragmentMethodInvoker.lambda$new$0(RepositoryMethodInvoker.java:277) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.data.repository.core.support.RepositoryMethodInvoker.doInvoke(RepositoryMethodInvoker.java:170) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.data.repository.core.support.RepositoryMethodInvoker.invoke(RepositoryMethodInvoker.java:158) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.data.repository.core.support.RepositoryComposition$RepositoryFragments.invoke(RepositoryComposition.java:515) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.data.repository.core.support.RepositoryComposition.invoke(RepositoryComposition.java:284) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.data.repository.core.support.RepositoryFactorySupport$ImplementationMethodExecutionInterceptor.invoke(RepositoryFactorySupport.java:720) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.data.repository.core.support.QueryExecutorMethodInterceptor.doInvoke(QueryExecutorMethodInterceptor.java:174) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.data.repository.core.support.QueryExecutorMethodInterceptor.invoke(QueryExecutorMethodInterceptor.java:149) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.data.projection.DefaultMethodInvokingMethodInterceptor.invoke(DefaultMethodInvokingMethodInterceptor.java:69) ~[spring-data-commons-3.5.13.jar!/:3.5.13]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:380) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.2.19.jar!/:6.2.19]
+	at org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:138) ~[spring-tx-6.2.19.jar!/:6.2.19]
+	... 161 common frames omitted
+Caused by: com.mysql.cj.jdbc.exceptions.MySQLTransactionRollbackException: Deadlock found when trying to get lock; try restarting transaction
+	at com.mysql.cj.jdbc.exceptions.SQLError.createSQLException(SQLError.java:115) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException(SQLExceptionsMapping.java:114) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.mysql.cj.jdbc.ClientPreparedStatement.executeInternal(ClientPreparedStatement.java:988) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdateInternal(ClientPreparedStatement.java:1166) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdateInternal(ClientPreparedStatement.java:1101) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.mysql.cj.jdbc.ClientPreparedStatement.executeLargeUpdate(ClientPreparedStatement.java:1448) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdate(ClientPreparedStatement.java:1084) ~[mysql-connector-j-9.7.0.jar!/:9.7.0]
+	at com.zaxxer.hikari.pool.ProxyPreparedStatement.executeUpdate(ProxyPreparedStatement.java:61) ~[HikariCP-6.3.3.jar!/:na]
+	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.executeUpdate(HikariProxyPreparedStatement.java) ~[HikariCP-6.3.3.jar!/:na]
+	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:194) ~[hibernate-core-6.6.53.Final.jar!/:6.6.53.Final]
+	... 207 common frames omitted
+
+2026-11-28T16:13:34.428Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-6] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:7
+2026-11-28T16:13:34.430Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-6] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:3:day:20789
+2026-11-28T16:13:34.441Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-14] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:23
+2026-11-28T16:13:34.449Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:8
+2026-11-28T16:13:34.454Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:4:day:20789
+2026-11-28T16:13:34.458Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-14] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:19:day:20789
+2026-11-28T16:13:34.458Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-18] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:30
+2026-11-28T16:13:34.459Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:12
+2026-11-28T16:13:34.461Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-18] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:26:day:20789
+2026-11-28T16:13:34.463Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:8:day:20789
+2026-11-28T16:13:34.466Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-2] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:31
+2026-11-28T16:13:34.467Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-19] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:26
+2026-11-28T16:13:34.469Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-6] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=3 remainingMs=899966 bucketMs=300000 deadline=2026-11-28T16:28:34.431761767Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.471Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-5] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:11
+2026-11-28T16:13:34.472Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-10] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:24
+2026-11-28T16:13:34.473Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-19] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:22:day:20789
+2026-11-28T16:13:34.474Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-5] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:7:day:20789
+2026-11-28T16:13:34.474Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-6] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:3:day:20789
+2026-11-28T16:13:34.475Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-2] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:27:day:20789
+2026-11-28T16:13:34.477Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-10] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:20:day:20789
+2026-11-28T16:13:34.477Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-6] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:7
+2026-11-28T16:13:34.478Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-9] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:20
+2026-11-28T16:13:34.483Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:9
+2026-11-28T16:13:34.483Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-9] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:16:day:20789
+2026-11-28T16:13:34.484Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-12] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:36
+2026-11-28T16:13:34.485Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-4] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:14
+2026-11-28T16:13:34.486Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:5:day:20789
+2026-11-28T16:13:34.486Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-12] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:32:day:20789
+2026-11-28T16:13:34.488Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-4] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:10:day:20789
+2026-11-28T16:13:34.496Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-20] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:25
+2026-11-28T16:13:34.497Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-20] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:21:day:20789
+2026-11-28T16:13:34.498Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-21] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:16
+2026-11-28T16:13:34.501Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-3] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:32
+2026-11-28T16:13:34.502Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-21] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:12:day:20789
+2026-11-28T16:13:34.506Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-11] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:27
+2026-11-28T16:13:34.512Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-3] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:28:day:20789
+2026-11-28T16:13:34.509Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-24] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:37
+2026-11-28T16:13:34.510Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-11] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:23:day:20789
+2026-11-28T16:13:34.521Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-18] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=4 remainingMs=899946 bucketMs=300000 deadline=2026-11-28T16:28:34.466446251Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.521Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-24] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:33:day:20789
+2026-11-28T16:13:34.524Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-16] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:35
+2026-11-28T16:13:34.525Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-22] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:10
+2026-11-28T16:13:34.528Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-22] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:6:day:20789
+2026-11-28T16:13:34.530Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=5 remainingMs=899932 bucketMs=300000 deadline=2026-11-28T16:28:34.461624014Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.532Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-16] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:31:day:20789
+2026-11-28T16:13:34.533Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-18] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:26:day:20789
+2026-11-28T16:13:34.533Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-18] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:30
+2026-11-28T16:13:34.534Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:4:day:20789
+2026-11-28T16:13:34.535Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-7] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:8
+2026-11-28T16:13:34.538Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=6 remainingMs=899926 bucketMs=300000 deadline=2026-11-28T16:28:34.464560633Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.542Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:8:day:20789
+2026-11-28T16:13:34.544Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-8] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:12
+2026-11-28T16:13:34.549Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-9] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=7 remainingMs=899937 bucketMs=300000 deadline=2026-11-28T16:28:34.484274089Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.549Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-30] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:15
+2026-11-28T16:13:34.550Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-13] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:28
+2026-11-28T16:13:34.554Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-9] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:16:day:20789
+2026-11-28T16:13:34.554Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-30] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:11:day:20789
+2026-11-28T16:13:34.554Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-13] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:24:day:20789
+2026-11-28T16:13:34.556Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-20] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=8 remainingMs=899944 bucketMs=300000 deadline=2026-11-28T16:28:34.499604655Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.557Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-9] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:20
+2026-11-28T16:13:34.559Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-20] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:21:day:20789
+2026-11-28T16:13:34.561Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-20] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:25
+2026-11-28T16:13:34.564Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-32] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:18
+2026-11-28T16:13:34.565Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-21] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=9 remainingMs=899938 bucketMs=300000 deadline=2026-11-28T16:28:34.503483742Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.567Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-21] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:12:day:20789
+2026-11-28T16:13:34.568Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-32] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:14:day:20789
+2026-11-28T16:13:34.569Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-27] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:13
+2026-11-28T16:13:34.569Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-21] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:16
+2026-11-28T16:13:34.572Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-27] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:9:day:20789
+2026-11-28T16:13:34.573Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-26] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:22
+2026-11-28T16:13:34.574Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-26] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:18:day:20789
+2026-11-28T16:13:34.574Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-10] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=10 remainingMs=899928 bucketMs=300000 deadline=2026-11-28T16:28:34.500717826Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.577Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-29] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:29
+2026-11-28T16:13:34.577Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-25] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:34
+2026-11-28T16:13:34.577Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-10] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:20:day:20789
+2026-11-28T16:13:34.578Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-25] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:30:day:20789
+2026-11-28T16:13:34.578Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-29] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:25:day:20789
+2026-11-28T16:13:34.582Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-10] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:24
+2026-11-28T16:13:34.583Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-31] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:33
+2026-11-28T16:13:34.584Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-31] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:29:day:20789
+2026-11-28T16:13:34.587Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-19] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=11 remainingMs=899921 bucketMs=300000 deadline=2026-11-28T16:28:34.507735980Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.588Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-23] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:17
+2026-11-28T16:13:34.589Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-19] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:22:day:20789
+2026-11-28T16:13:34.589Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-23] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:13:day:20789
+2026-11-28T16:13:34.589Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-28] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:21
+2026-11-28T16:13:34.590Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-19] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:26
+2026-11-28T16:13:34.591Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-28] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:17:day:20789
+2026-11-28T16:13:34.600Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=12 remainingMs=899931 bucketMs=300000 deadline=2026-11-28T16:28:34.527620439Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.602Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-5] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=13 remainingMs=899915 bucketMs=300000 deadline=2026-11-28T16:28:34.515715549Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.602Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:5:day:20789
+2026-11-28T16:13:34.603Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-5] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:7:day:20789
+2026-11-28T16:13:34.603Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-1] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:9
+2026-11-28T16:13:34.605Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-5] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:11
+2026-11-28T16:13:34.611Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-24] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=14 remainingMs=899916 bucketMs=300000 deadline=2026-11-28T16:28:34.526038366Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.613Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-24] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:33:day:20789
+2026-11-28T16:13:34.614Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-14] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=15 remainingMs=899933 bucketMs=300000 deadline=2026-11-28T16:28:34.547470701Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.615Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-24] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:37
+2026-11-28T16:13:34.615Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-14] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:19:day:20789
+2026-11-28T16:13:34.616Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-14] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:23
+2026-11-28T16:13:34.622Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-15] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:19
+2026-11-28T16:13:34.624Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-15] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:15:day:20789
+2026-11-28T16:13:34.622Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-2] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=16 remainingMs=899928 bucketMs=300000 deadline=2026-11-28T16:28:34.549623715Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.624Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-2] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:27:day:20789
+2026-11-28T16:13:34.625Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-2] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:31
+2026-11-28T16:13:34.632Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-11] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=17 remainingMs=899950 bucketMs=300000 deadline=2026-11-28T16:28:34.582841018Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.633Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-11] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:23:day:20789
+2026-11-28T16:13:34.635Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-11] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:27
+2026-11-28T16:13:34.638Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-3] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=18 remainingMs=899942 bucketMs=300000 deadline=2026-11-28T16:28:34.579899460Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.639Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-3] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:28:day:20789
+2026-11-28T16:13:34.640Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-3] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:32
+2026-11-28T16:13:34.645Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-22] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=19 remainingMs=899943 bucketMs=300000 deadline=2026-11-28T16:28:34.588354926Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.647Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-22] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:6:day:20789
+2026-11-28T16:13:34.648Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-16] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=20 remainingMs=899946 bucketMs=300000 deadline=2026-11-28T16:28:34.592824014Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.648Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-22] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:10
+2026-11-28T16:13:34.649Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-16] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:31:day:20789
+2026-11-28T16:13:34.651Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-16] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:35
+2026-11-28T16:13:34.653Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-4] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=21 remainingMs=899949 bucketMs=300000 deadline=2026-11-28T16:28:34.600465640Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.655Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-4] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:10:day:20789
+2026-11-28T16:13:34.656Z  INFO 16403 --- [lab-equipment-platform] [.1-18080-exec-4] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:14
+2026-11-28T16:13:34.657Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-12] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=22 remainingMs=899930 bucketMs=300000 deadline=2026-11-28T16:28:34.585955492Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.660Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-12] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:32:day:20789
+2026-11-28T16:13:34.662Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-12] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:36
+2026-11-28T16:13:34.665Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-30] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=23 remainingMs=899937 bucketMs=300000 deadline=2026-11-28T16:28:34.602819324Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.666Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-30] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:11:day:20789
+2026-11-28T16:13:34.668Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-30] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:15
+2026-11-28T16:13:34.671Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-32] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=24 remainingMs=899950 bucketMs=300000 deadline=2026-11-28T16:28:34.621558712Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.671Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-17] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:user:38
+2026-11-28T16:13:34.672Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-32] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:14:day:20789
+2026-11-28T16:13:34.673Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-17] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock acquired key=labops:reservation:equipment:34:day:20789
+2026-11-28T16:13:34.673Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-32] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:18
+2026-11-28T16:13:34.674Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-13] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=25 remainingMs=899938 bucketMs=300000 deadline=2026-11-28T16:28:34.612501780Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.676Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-13] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:24:day:20789
+2026-11-28T16:13:34.677Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-13] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:28
+2026-11-28T16:13:34.681Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-27] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=26 remainingMs=899944 bucketMs=300000 deadline=2026-11-28T16:28:34.624548409Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.682Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-27] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:9:day:20789
+2026-11-28T16:13:34.682Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-27] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:13
+2026-11-28T16:13:34.686Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-26] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=27 remainingMs=899947 bucketMs=300000 deadline=2026-11-28T16:28:34.633297297Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.688Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-26] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:18:day:20789
+2026-11-28T16:13:34.688Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-26] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:22
+2026-11-28T16:13:34.690Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-25] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=28 remainingMs=899948 bucketMs=300000 deadline=2026-11-28T16:28:34.638548526Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.691Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-25] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:30:day:20789
+2026-11-28T16:13:34.693Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-25] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:34
+2026-11-28T16:13:34.694Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-29] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=29 remainingMs=899953 bucketMs=300000 deadline=2026-11-28T16:28:34.647028083Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.695Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-29] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:25:day:20789
+2026-11-28T16:13:34.695Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-29] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:29
+2026-11-28T16:13:34.698Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-31] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=30 remainingMs=899950 bucketMs=300000 deadline=2026-11-28T16:28:34.648785447Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.699Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-31] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:29:day:20789
+2026-11-28T16:13:34.699Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-31] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:33
+2026-11-28T16:13:34.703Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-23] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=31 remainingMs=899952 bucketMs=300000 deadline=2026-11-28T16:28:34.655284592Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.704Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-23] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:13:day:20789
+2026-11-28T16:13:34.705Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-23] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:17
+2026-11-28T16:13:34.707Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-28] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=32 remainingMs=899954 bucketMs=300000 deadline=2026-11-28T16:28:34.660017502Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.709Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-28] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:17:day:20789
+2026-11-28T16:13:34.709Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-28] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:21
+2026-11-28T16:13:34.710Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-17] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=33 remainingMs=899964 bucketMs=300000 deadline=2026-11-28T16:28:34.674075829Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.712Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-17] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:34:day:20789
+2026-11-28T16:13:34.713Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-17] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:38
+2026-11-28T16:13:34.714Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-15] a.l.r.e.RabbitReservationExpiryScheduler : RabbitMQ deadline scheduled kind=APPROVAL reservationId=34 remainingMs=899958 bucketMs=300000 deadline=2026-11-28T16:28:34.672762496Z bucketQueue=labops.reservation.expiry.delay.bucket.300000ms dlx=labops.reservation.expiry.exchange
+2026-11-28T16:13:34.715Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-15] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:equipment:15:day:20789
+2026-11-28T16:13:34.715Z  INFO 16403 --- [lab-equipment-platform] [1-18080-exec-15] c.a.l.r.lock.RedisReservationLock        : Redis reservation lock released key=labops:reservation:user:19
+2026-11-28T16:13:35.172Z  INFO 16403 --- [lab-equipment-platform] [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Waiting for workers to finish.
+2026-11-28T16:13:35.375Z  INFO 16403 --- [lab-equipment-platform] [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Successfully waited for workers to finish.
+2026-11-28T16:13:35.375Z  INFO 16403 --- [lab-equipment-platform] [ionShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-28T16:13:35.377Z  INFO 16403 --- [lab-equipment-platform] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2026-11-28T16:13:35.393Z  INFO 16403 --- [lab-equipment-platform] [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-11-28T16:13:35.395Z  INFO 16403 --- [lab-equipment-platform] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-11-28T16:13:35.399Z  INFO 16403 --- [lab-equipment-platform] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

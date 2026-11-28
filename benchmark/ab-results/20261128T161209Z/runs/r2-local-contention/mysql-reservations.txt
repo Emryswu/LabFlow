@@ -1,0 +1,10 @@
+status	rows_n
+PENDING	33
+equipment_n
+3
+reservation_n
+33
+id	code
+3	AB-6CD95F848C354340-0
+equipment_id	status	rows_n
+3	PENDING	32

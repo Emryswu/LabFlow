@@ -1,0 +1,11 @@
+LOGIN admin status=200 latency_ms=86.4
+LOGIN bench01 status=200 latency_ms=75.0
+LOGIN bench02 status=200 latency_ms=75.0
+LOGIN bench03 status=200 latency_ms=74.7
+LOGIN bench04 status=200 latency_ms=74.0
+LOGIN bench05 status=200 latency_ms=73.3
+LOGIN bench06 status=200 latency_ms=75.4
+LOGIN bench07 status=200 latency_ms=75.7
+LOGIN bench08 status=200 latency_ms=73.6
+CREATE_EQUIPMENT code=AB-7d45c9c9811a44b3-0 status=201 latency_ms=11.4
+valid=True output=/workspace/benchmark/ab-results/20261128T161209Z/runs/r1-local-approval/measured/client.json

@@ -1,0 +1,11 @@
+LOGIN admin status=200 latency_ms=76.6
+LOGIN bench01 status=200 latency_ms=75.0
+LOGIN bench02 status=200 latency_ms=73.9
+LOGIN bench03 status=200 latency_ms=73.1
+LOGIN bench04 status=200 latency_ms=73.9
+LOGIN bench05 status=200 latency_ms=73.8
+LOGIN bench06 status=200 latency_ms=74.5
+LOGIN bench07 status=200 latency_ms=73.9
+LOGIN bench08 status=200 latency_ms=77.6
+CREATE_EQUIPMENT code=AB-9418675878bd4a44-0 status=201 latency_ms=11.4
+valid=True output=/workspace/benchmark/ab-results/20261128T161209Z/runs/r2-redis-approval/measured/client.json

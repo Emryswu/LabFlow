@@ -1,0 +1,199 @@
+{
+  "requests": [
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 50.81751800003076,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 77.8594079999948,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 68.90405199987981,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 72.86135699996521,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 200,
+      "code": null,
+      "latency_ms": 46.63934599989261,
+      "id": 7,
+      "state": "APPROVED"
+    },
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 62.727077999852554,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 65.95607300005213,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 409,
+      "code": "RESERVATION_CONFLICT",
+      "latency_ms": 57.07856700018965,
+      "id": null,
+      "state": 409
+    }
+  ],
+  "status_counts": {
+    "409": 7,
+    "200": 1
+  },
+  "error_code_counts": {
+    "RESERVATION_CONFLICT": 7,
+    "HTTP_200": 1
+  },
+  "wall_seconds": 0.07842838999999913,
+  "all_responses_per_second": 102.003878952508,
+  "successful_operations_per_second": 12.7504848690635,
+  "latency_all": {
+    "count": 8,
+    "min_ms": 46.639,
+    "avg_ms": 62.855,
+    "p50_ms": 64.342,
+    "p95_ms": 76.11,
+    "p99_ms": 77.51,
+    "max_ms": 77.859
+  },
+  "latency_success": {
+    "count": 1,
+    "min_ms": 46.639,
+    "avg_ms": 46.639,
+    "p50_ms": 46.639,
+    "p95_ms": 46.639,
+    "p99_ms": 46.639,
+    "max_ms": 46.639
+  },
+  "setup": [
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 24.16484200011837,
+      "id": 3,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 21.46910300007221,
+      "id": 4,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 21.578397999974186,
+      "id": 5,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 20.80024599990793,
+      "id": 6,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 20.381762999932107,
+      "id": 7,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 20.941163000088636,
+      "id": 8,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 20.543597999903795,
+      "id": 9,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 21.759295000038037,
+      "id": 10,
+      "state": "PENDING"
+    }
+  ],
+  "valid": true,
+  "scenario": "approval",
+  "declared_lock_mode": "redis",
+  "commit": "a6684f3aa7eb7905c2a735201509f6e6b34e7cd5",
+  "run_id": "271952c5a9964d80",
+  "round": 3,
+  "concurrency": 8,
+  "equipment_ids": [
+    3
+  ],
+  "persisted": [
+    {
+      "id": 3,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 4,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 5,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 6,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 7,
+      "equipmentId": 3,
+      "status": "APPROVED"
+    },
+    {
+      "id": 8,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 9,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 10,
+      "equipmentId": 3,
+      "status": "PENDING"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "commit": "a6684f3aa7eb7905c2a735201509f6e6b34e7cd5",
+  "scenarios": [
+    {
+      "name": "contention",
+      "concurrency": 32
+    },
+    {
+      "name": "independent",
+      "concurrency": 32
+    },
+    {
+      "name": "approval",
+      "concurrency": 8
+    }
+  ],
+  "rounds": 3,
+  "timeout_seconds": 60,
+  "order": "odd rounds local then redis; even rounds redis then local",
+  "warmup": "independent concurrency 2, saved separately, not used as the comparison"
+}

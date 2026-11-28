@@ -1,0 +1,37 @@
+2026-11-28T16:12:09Z begin r1-local-contention
+2026-11-28T16:12:20Z end r1-local-contention warmup=2 measured=0
+2026-11-28T16:12:21Z begin r1-local-independent
+2026-11-28T16:12:32Z end r1-local-independent warmup=2 measured=0
+2026-11-28T16:12:33Z begin r1-local-approval
+2026-11-28T16:12:41Z end r1-local-approval warmup=2 measured=0
+2026-11-28T16:12:42Z begin r1-redis-contention
+2026-11-28T16:12:53Z end r1-redis-contention warmup=2 measured=0
+2026-11-28T16:12:53Z begin r1-redis-independent
+2026-11-28T16:13:04Z end r1-redis-independent warmup=0 measured=2
+2026-11-28T16:13:05Z begin r1-redis-approval
+2026-11-28T16:13:13Z end r1-redis-approval warmup=2 measured=0
+2026-11-28T16:13:13Z begin r2-redis-contention
+2026-11-28T16:13:24Z end r2-redis-contention warmup=2 measured=0
+2026-11-28T16:13:24Z begin r2-redis-independent
+2026-11-28T16:13:35Z end r2-redis-independent warmup=2 measured=0
+2026-11-28T16:13:35Z begin r2-redis-approval
+2026-11-28T16:13:43Z end r2-redis-approval warmup=2 measured=0
+2026-11-28T16:13:43Z begin r2-local-contention
+2026-11-28T16:13:54Z end r2-local-contention warmup=2 measured=0
+2026-11-28T16:13:54Z begin r2-local-independent
+2026-11-28T16:14:05Z end r2-local-independent warmup=2 measured=0
+2026-11-28T16:14:05Z begin r2-local-approval
+2026-11-28T16:14:13Z end r2-local-approval warmup=2 measured=0
+2026-11-28T16:14:14Z begin r3-local-contention
+2026-11-28T16:14:24Z end r3-local-contention warmup=2 measured=0
+2026-11-28T16:14:25Z begin r3-local-independent
+2026-11-28T16:14:36Z end r3-local-independent warmup=2 measured=0
+2026-11-28T16:14:37Z begin r3-local-approval
+2026-11-28T16:14:45Z end r3-local-approval warmup=2 measured=0
+2026-11-28T16:14:46Z begin r3-redis-contention
+2026-11-28T16:14:57Z end r3-redis-contention warmup=2 measured=0
+2026-11-28T16:14:58Z begin r3-redis-independent
+2026-11-28T16:15:10Z end r3-redis-independent warmup=2 measured=0
+2026-11-28T16:15:10Z begin r3-redis-approval
+2026-11-28T16:15:19Z end r3-redis-approval warmup=2 measured=0
+2026-11-28T16:15:20Z matrix complete

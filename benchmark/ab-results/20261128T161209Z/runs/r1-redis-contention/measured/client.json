@@ -1,0 +1,427 @@
+{
+  "requests": [
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 459.8162659999616,
+      "id": 27,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 277.5625200001741,
+      "id": 18,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 221.67601000001014,
+      "id": 13,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 238.06696199994803,
+      "id": 14,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 93.69810900011544,
+      "id": 4,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 493.1685229998948,
+      "id": 29,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 73.65674800007582,
+      "id": 3,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 108.13221500006875,
+      "id": 6,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 345.9972870000456,
+      "id": 20,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 251.5666990000227,
+      "id": 15,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 525.5104369998662,
+      "id": 30,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 375.98210900000595,
+      "id": 22,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 439.781579000055,
+      "id": 26,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 476.35053700014396,
+      "id": 28,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 771.0522560000754,
+      "id": 34,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 131.34826300006353,
+      "id": 7,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 386.11287800017635,
+      "id": 23,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 593.1080999998812,
+      "id": 32,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 658.9837429999079,
+      "id": 33,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 96.53135100006693,
+      "id": 5,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 278.03247599990755,
+      "id": 17,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 264.47300799986806,
+      "id": 16,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 412.30439400010255,
+      "id": 24,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 333.69898599994485,
+      "id": 19,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 164.00600399992982,
+      "id": 9,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 559.853430999965,
+      "id": 31,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 423.2001269999728,
+      "id": 25,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 192.27273199999217,
+      "id": 11,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 206.5092469999854,
+      "id": 12,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 176.27269400009027,
+      "id": 10,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 364.7585740000068,
+      "id": 21,
+      "state": "PENDING"
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 143.8542989999405,
+      "id": 8,
+      "state": "PENDING"
+    }
+  ],
+  "status_counts": {
+    "201": 32
+  },
+  "error_code_counts": {
+    "HTTP_201": 32
+  },
+  "wall_seconds": 0.7729167929999221,
+  "all_responses_per_second": 41.40161048357921,
+  "successful_operations_per_second": 41.40161048357921,
+  "latency_all": {
+    "count": 32,
+    "min_ms": 73.657,
+    "avg_ms": 329.292,
+    "p50_ms": 305.866,
+    "p95_ms": 622.752,
+    "p99_ms": 736.311,
+    "max_ms": 771.052
+  },
+  "latency_success": {
+    "count": 32,
+    "min_ms": 73.657,
+    "avg_ms": 329.292,
+    "p50_ms": 305.866,
+    "p95_ms": 622.752,
+    "p99_ms": 736.311,
+    "max_ms": 771.052
+  },
+  "valid": true,
+  "scenario": "contention",
+  "declared_lock_mode": "redis",
+  "commit": "a6684f3aa7eb7905c2a735201509f6e6b34e7cd5",
+  "run_id": "4dcf2ddd0ac04aa4",
+  "round": 1,
+  "concurrency": 32,
+  "equipment_ids": [
+    3
+  ],
+  "persisted": [
+    {
+      "id": 3,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 4,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 5,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 6,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 7,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 8,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 9,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 10,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 11,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 12,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 13,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 14,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 15,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 16,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 17,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 18,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 19,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 20,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 21,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 22,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 23,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 24,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 25,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 26,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 27,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 28,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 29,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 30,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 31,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 32,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 33,
+      "equipmentId": 3,
+      "status": "PENDING"
+    },
+    {
+      "id": 34,
+      "equipmentId": 3,
+      "status": "PENDING"
+    }
+  ]
+}

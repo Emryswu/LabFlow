@@ -123,7 +123,7 @@ ReservationApplicationService.create
 4. 性能场景分别覆盖同设备争用和不同设备／日期的非争用请求，固定并发数、请求数、轮次与请求分布。记录各状态码计数、P50 / P95 / P99、吞吐及失败数，并区分所有响应吞吐与成功操作吞吐。
 5. 保存被测 commit、运行配置、原始 JSON、日志及数据库不变量检查结果；新结果单独存档，不覆盖旧报告。新的 [A/B 复测客户端及执行说明](benchmark/LOCK-AB.md) 支持当前创建与审批语义；[历史 Python 压测客户端](benchmark/bench_reservation.py) 保留用于解释旧报告。
 
-当前尚无以上单变量 A/B 实测数据，历史数值仅用于说明旧版本完整栈表现。
+同一 MySQL 上只切换锁实现的一次实测在 [`benchmark/AB-RESULTS.md`](benchmark/AB-RESULTS.md)，原始文件在 `benchmark/ab-results/20261128T161209Z/`。历史数值仍只说明旧版本完整栈表现。
 
 ## 超时过期（RabbitMQ）
 
