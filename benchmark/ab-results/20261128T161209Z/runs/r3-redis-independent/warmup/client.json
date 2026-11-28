@@ -1,0 +1,65 @@
+{
+  "requests": [
+    {
+      "http": 409,
+      "code": "RESOURCE_BUSY",
+      "latency_ms": 69.06165800000963,
+      "id": null,
+      "state": 409
+    },
+    {
+      "http": 201,
+      "code": null,
+      "latency_ms": 67.13079299993296,
+      "id": 1,
+      "state": "PENDING"
+    }
+  ],
+  "status_counts": {
+    "409": 1,
+    "201": 1
+  },
+  "error_code_counts": {
+    "RESOURCE_BUSY": 1,
+    "HTTP_201": 1
+  },
+  "wall_seconds": 0.06942812599982062,
+  "all_responses_per_second": 28.806769176013297,
+  "successful_operations_per_second": 14.403384588006649,
+  "latency_all": {
+    "count": 2,
+    "min_ms": 67.131,
+    "avg_ms": 68.096,
+    "p50_ms": 68.096,
+    "p95_ms": 68.965,
+    "p99_ms": 69.042,
+    "max_ms": 69.062
+  },
+  "latency_success": {
+    "count": 1,
+    "min_ms": 67.131,
+    "avg_ms": 67.131,
+    "p50_ms": 67.131,
+    "p95_ms": 67.131,
+    "p99_ms": 67.131,
+    "max_ms": 67.131
+  },
+  "valid": false,
+  "scenario": "independent",
+  "declared_lock_mode": "redis",
+  "commit": "a6684f3aa7eb7905c2a735201509f6e6b34e7cd5",
+  "run_id": "09a338dd5e604cad",
+  "round": 3,
+  "concurrency": 2,
+  "equipment_ids": [
+    1,
+    2
+  ],
+  "persisted": [
+    {
+      "id": 1,
+      "equipmentId": 2,
+      "status": "PENDING"
+    }
+  ]
+}

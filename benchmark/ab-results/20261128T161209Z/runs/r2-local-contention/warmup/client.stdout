@@ -1,0 +1,6 @@
+LOGIN admin status=200 latency_ms=346.5
+LOGIN bench01 status=200 latency_ms=89.7
+LOGIN bench02 status=200 latency_ms=75.9
+CREATE_EQUIPMENT code=AB-4c67393941e24ae9-0 status=201 latency_ms=58.4
+CREATE_EQUIPMENT code=AB-4c67393941e24ae9-1 status=201 latency_ms=12.7
+valid=False output=/workspace/benchmark/ab-results/20261128T161209Z/runs/r2-local-contention/warmup/client.json

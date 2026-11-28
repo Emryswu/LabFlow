@@ -1,0 +1,6 @@
+LOGIN admin status=200 latency_ms=341.6
+LOGIN bench01 status=200 latency_ms=78.9
+LOGIN bench02 status=200 latency_ms=77.0
+CREATE_EQUIPMENT code=AB-2a769c1369f34963-0 status=201 latency_ms=50.9
+CREATE_EQUIPMENT code=AB-2a769c1369f34963-1 status=201 latency_ms=12.5
+valid=True output=/workspace/benchmark/ab-results/20261128T161209Z/runs/r1-redis-independent/warmup/client.json

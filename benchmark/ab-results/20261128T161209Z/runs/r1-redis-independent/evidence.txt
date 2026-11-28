@@ -1,0 +1,3 @@
+declared_mode=redis
+redis_lock_acquired_log_lines=68
+redis_lock_released_log_lines=68

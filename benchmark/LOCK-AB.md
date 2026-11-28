@@ -1,6 +1,6 @@
 # 本地锁与 Redis 锁 A/B 复测
 
-**状态：已提供客户端，尚未运行真实中间件 A/B。** 历史 [RESULTS.md](RESULTS.md) 保留，不用它推断单独 Redis 锁的性能。
+**状态：已有一次真实运行。** 同一 MySQL 8.4.13 上只切换 `labops.reservation-lock.mode` 的原始数据和读法在 [AB-RESULTS.md](AB-RESULTS.md)，目录是 `benchmark/ab-results/20261128T161209Z/`。历史 [RESULTS.md](RESULTS.md) 仍是两套完整栈的旧结果，不用它推断单独 Redis 锁的性能。
 
 ## 实验设计
 

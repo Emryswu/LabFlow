@@ -1,0 +1,3 @@
+declared_mode=local
+redis_lock_acquired_log_lines=0
+redis_lock_released_log_lines=0
