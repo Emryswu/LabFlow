@@ -86,8 +86,9 @@ public class ReservationService {
         this.equipmentStatusService = equipmentStatusService;
     }
 
-    // User and equipment PK locks serialize quota and slot mutations. RR range
-    // locks on an empty conflict index can deadlock independent equipment inserts.
+    // User and equipment PK locks serialize quota and slot mutations. Under RR,
+    // an empty conflict scan can lock the reservation PRIMARY supremum gap;
+    // concurrent insert intentions can then deadlock even on different equipment.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservationResponse create(CreateReservationRequest request) {
         Instant now = Instant.now();
